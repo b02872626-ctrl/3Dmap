@@ -260,11 +260,13 @@ function flyToRoom(group) {
   group.getWorldPosition(wp);
   // Aim above the floor at roughly head/sculpture height
   const target = wp.clone();
-  target.y += 1.8;
-  // Distance scales with room size — smaller rooms get a tighter close-up
+  target.y += 1.6;
+  // Tight focus distance — camera moves CLOSE to the selected room so it
+  // fills the frame. Multiplier ~1.35× the room's longest side keeps the
+  // room visible plus a touch of context.
   const fp = group.userData.room.footprint;
   const span = Math.max(fp.w, fp.d);
-  let dist = THREE.MathUtils.clamp(span * 1.8, 15, 26);
+  let dist = THREE.MathUtils.clamp(span * 1.35, 8.5, 20);
   // Preserve the camera's current orbital orientation so the user doesn't
   // get teleported to a different angle every click — only the focus point
   // and distance change.

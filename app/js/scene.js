@@ -40,7 +40,7 @@ export function createScene(canvas) {
   controls.target.set(cx, 6, cz);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.minDistance = 14;
+  controls.minDistance = 7;     // allow real close-up focus on small rooms
   controls.maxDistance = 140;
   // Keep the camera in the isometric range: never less than ~22° above
   // the horizon, never less than ~16° from straight overhead.
