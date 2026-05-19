@@ -4,7 +4,14 @@
 import * as THREE from "three";
 import { createScene } from "./scene.js";
 import { buildFloors, tryReplaceWithFBX } from "./floors.js";
-import { CATEGORIES, FLOORS, ROOMS } from "./data.js";
+import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS } from "./data.js";
+
+// Plan-center offset used to map footprint coordinates into the
+// floor-group's local (centered-on-building) coordinate system.
+const PLAN_CENTER = {
+  x: (PLAN_BOUNDS.minX + PLAN_BOUNDS.maxX) / 2,
+  z: (PLAN_BOUNDS.minZ + PLAN_BOUNDS.maxZ) / 2,
+};
 import { buildGraph, findPath, describePath } from "./pathfinding.js";
 import { createRouteLayer } from "./route.js";
 
@@ -256,15 +263,21 @@ function hideDetails() { detailsEl.classList.remove("visible"); }
 let flyAnim = null;
 
 function flyToRoom(group) {
-  const wp = new THREE.Vector3();
-  group.getWorldPosition(wp);
-  // Aim above the floor at roughly head/sculpture height
-  const target = wp.clone();
-  target.y += 1.6;
+  const room = group.userData.room;
+  const fp = room.footprint;
+
+  // The room GROUP has no offset of its own — every child is positioned in
+  // floor-local plan-centered coords. So we compute the room's actual
+  // center from its footprint, then add the live floor-group Y so explode
+  // / floor-switch animations are respected.
+  const localX = (fp.x + fp.w / 2) - PLAN_CENTER.x;
+  const localZ = (fp.z + fp.d / 2) - PLAN_CENTER.z;
+  const floorGroup = group.parent;
+  const floorY = floorGroup ? floorGroup.position.y : 0;
+  const target = new THREE.Vector3(localX, floorY + 1.6, localZ);
+
   // Tight focus distance — camera moves CLOSE to the selected room so it
-  // fills the frame. Multiplier ~1.35× the room's longest side keeps the
-  // room visible plus a touch of context.
-  const fp = group.userData.room.footprint;
+  // fills the frame.
   const span = Math.max(fp.w, fp.d);
   let dist = THREE.MathUtils.clamp(span * 1.35, 8.5, 20);
   // Preserve the camera's current orbital orientation so the user doesn't
