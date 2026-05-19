@@ -680,49 +680,11 @@ function makeLabelTexture(text) {
   return tex;
 }
 
-function addRoomLabel(group, room, cx, cz) {
-  if (room.entrance || room.icon) return; // these get their own text
-  const { w, d } = room.footprint;
-  const min = Math.min(w, d);
-  if (min < 1.8) return;
-
-  const tex = makeLabelTexture(room.id);
-  const aspect = tex.image.width / tex.image.height;
-  // Slightly smaller pills in tight rooms, larger in halls
-  const heightWorld = THREE.MathUtils.clamp(min * 0.13, 0.5, 0.78);
-  const widthWorld  = heightWorld * aspect;
-
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-  }));
-  sprite.scale.set(widthWorld, heightWorld, 1);
-  // Float just above sculpture/pedestal height so the badge reads as
-  // "marker for this room", not "sticker on the floor".
-  sprite.position.set(cx, FLOOR_THICK + 1.6, cz);
-  sprite.renderOrder = 1000;
-  group.add(sprite);
-}
-
-function addTextSprite(group, text, x, y, z, scale /*, color */) {
-  const tex = makeLabelTexture(text);
-  const aspect = tex.image.width / tex.image.height;
-  const heightWorld = scale * 0.62;
-  const widthWorld  = heightWorld * aspect;
-
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-  }));
-  sprite.scale.set(widthWorld, heightWorld, 1);
-  sprite.position.set(x, y, z);
-  sprite.renderOrder = 1000;
-  group.add(sprite);
-}
+// Labels in-world were removed — info is now shown via the cursor tooltip
+// (rendered in the DOM by main.js). These helpers stay as no-ops so the
+// build code doesn't need to change shape.
+function addRoomLabel(/* group, room, cx, cz */) {}
+function addTextSprite(/* group, text, x, y, z, scale */) {}
 
 // =============================================================
 //  FBX swap hook (unchanged contract)
