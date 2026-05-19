@@ -774,4 +774,123 @@ start(() => {
   updateXray();
 });
 
+// ====================================================================
+//  Mobile UI: hamburger drawer, mobile search, floor buttons, legend,
+//  explode/reset, and in-world label visibility toggle.
+// ====================================================================
+const hamburger    = document.getElementById("hamburger");
+const drawerEl     = document.getElementById("mobile-drawer");
+const scrimEl      = document.getElementById("mobile-scrim");
+const mobileClose  = document.getElementById("mobile-close");
+
+function setDrawerOpen(open) {
+  if (!drawerEl) return;
+  drawerEl.classList.toggle("open", open);
+  scrimEl?.classList.toggle("open", open);
+  drawerEl.setAttribute("aria-hidden", String(!open));
+  hamburger?.setAttribute("aria-expanded", String(open));
+}
+
+hamburger?.addEventListener("click", () => setDrawerOpen(true));
+mobileClose?.addEventListener("click", () => setDrawerOpen(false));
+scrimEl?.addEventListener("click", () => setDrawerOpen(false));
+
+// --- Floor buttons (mobile) ---
+document.querySelectorAll("[data-mobile-floor]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-mobile-floor]").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const v = btn.dataset.mobileFloor;
+    activeFloor = v === "all" ? "all" : parseInt(v, 10);
+    // Sync the desktop floor switcher's active state so things stay consistent
+    document.querySelectorAll(".floor-switcher [data-floor]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.floor === v),
+    );
+    applyFloorLayout();
+    setDrawerOpen(false);
+  });
+});
+
+// --- Directions / explode / reset (mobile) ---
+document.getElementById("mobile-directions")?.addEventListener("click", () => {
+  setDrawerOpen(false);
+  openDirections();
+});
+document.getElementById("mobile-explode")?.addEventListener("click", () => {
+  exploded = !exploded;
+  document.getElementById("toggle-explode")?.classList.toggle("active", exploded);
+  applyFloorLayout();
+});
+document.getElementById("mobile-reset")?.addEventListener("click", () => {
+  setDrawerOpen(false);
+  flyTo(new THREE.Vector3(0, 6, 0), new THREE.Vector3(50, 55, 50), 60);
+});
+
+// --- Collections legend (mobile) — populated from CATEGORIES ---
+const mobileLegendEl = document.getElementById("mobile-legend");
+if (mobileLegendEl) {
+  for (const [key, cat] of Object.entries(CATEGORIES)) {
+    const li = document.createElement("li");
+    li.dataset.cat = key;
+    li.innerHTML = `<span class="swatch" style="background:#${cat.color.toString(16).padStart(6,"0")}"></span><span>${cat.label}</span>`;
+    li.addEventListener("click", () => {
+      if (activeCategories.has(key)) activeCategories.delete(key);
+      else activeCategories.add(key);
+      li.classList.toggle("off", !activeCategories.has(key));
+      // mirror to desktop legend
+      const dItem = document.querySelector(`#legend-list [data-cat="${key}"]`);
+      if (dItem) dItem.classList.toggle("off", !activeCategories.has(key));
+      applyCategoryFilter();
+    });
+    mobileLegendEl.appendChild(li);
+  }
+}
+
+// --- Mobile search (mirrors desktop search behavior) ---
+const mSearchInput   = document.getElementById("mobile-search-input");
+const mSearchResults = document.getElementById("mobile-search-results");
+mSearchInput?.addEventListener("input", () => {
+  const q = mSearchInput.value.trim().toLowerCase();
+  mSearchResults.innerHTML = "";
+  if (!q) return;
+  const matches = ROOMS.filter((r) =>
+    r.name.toLowerCase().includes(q) ||
+    r.id.toLowerCase().includes(q) ||
+    (CATEGORIES[r.category]?.label.toLowerCase().includes(q)),
+  ).slice(0, 8);
+  for (const room of matches) {
+    const cat = CATEGORIES[room.category] || CATEGORIES.amenity;
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="swatch" style="background:#${cat.color.toString(16).padStart(6,"0")}"></span>
+      <span>${room.name}</span>
+      <span class="sub">F${room.floor}</span>`;
+    li.addEventListener("click", () => {
+      activeFloor = "all";
+      document.querySelectorAll(".floor-switcher [data-floor]").forEach((b) =>
+        b.classList.toggle("active", b.dataset.floor === "all"),
+      );
+      applyFloorLayout();
+      const rg = roomGroups.find((g) => g.userData.roomId === room.id);
+      if (rg) select(rg);
+      setDrawerOpen(false);
+      mSearchInput.value = room.name;
+    });
+    mSearchResults.appendChild(li);
+  }
+});
+
+// --- In-world labels: visible on mobile / touch, hidden on desktop ---
+// We listen to a media query so a window resize (or device rotation) flips
+// the labels and hover tooltip behaviour automatically.
+const isMobileMQ = window.matchMedia("(max-width: 760px), (pointer: coarse) and (hover: none)");
+function applyMobileMode(mobile) {
+  root.traverse((o) => {
+    if (o.userData?.isLabel) o.visible = mobile;
+  });
+  document.body.classList.toggle("is-mobile", mobile);
+}
+applyMobileMode(isMobileMQ.matches);
+isMobileMQ.addEventListener?.("change", (e) => applyMobileMode(e.matches));
+
 window.__cam = { scene, camera, controls, floorGroups, roomGroups, graph, routeLayer };

@@ -101,8 +101,55 @@
     </div>
   </section>
 
-  <!-- Hover tooltip -->
+  <!-- Hover tooltip (desktop only) -->
   <div class="tooltip" id="tooltip" aria-hidden="true"></div>
+
+  <!-- ===================== Mobile UI ===================== -->
+  <button class="hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false">
+    <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+  </button>
+  <div class="mobile-scrim" id="mobile-scrim" aria-hidden="true"></div>
+  <aside class="mobile-drawer" id="mobile-drawer" aria-hidden="true">
+    <div class="mobile-drawer-head">
+      <div>
+        <h3>Cincinnati Art Museum</h3>
+        <p class="mobile-sub">3D Visitor Guide</p>
+      </div>
+      <button class="icon-btn" id="mobile-close" aria-label="Close menu">×</button>
+    </div>
+
+    <div class="mobile-search">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M10 2a8 8 0 1 1-5.3 14L1 19.7 2.3 21l3.7-3.7A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
+      <input id="mobile-search-input" type="text" placeholder="Search galleries, amenities…" autocomplete="off" />
+      <ul id="mobile-search-results"></ul>
+    </div>
+
+    <button class="primary-btn full" id="mobile-directions">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4z"/></svg>
+      Get Directions
+    </button>
+
+    <div class="mobile-section">
+      <h4>Floor</h4>
+      <div class="mobile-floors" id="mobile-floors">
+        <button data-mobile-floor="all" class="active">All</button>
+        <button data-mobile-floor="3">3</button>
+        <button data-mobile-floor="2">2</button>
+        <button data-mobile-floor="1">1</button>
+      </div>
+    </div>
+
+    <div class="mobile-section">
+      <h4>View</h4>
+      <button class="ghost-btn full" id="mobile-explode">Toggle exploded view</button>
+      <button class="ghost-btn full" id="mobile-reset" style="margin-top:6px">Reset camera</button>
+    </div>
+
+    <div class="mobile-section">
+      <h4>Collections</h4>
+      <ul class="mobile-legend" id="mobile-legend"></ul>
+    </div>
+  </aside>
 
   <!-- Loader -->
   <div class="loader" id="loader"><div class="spinner"></div><span>Building map…</span></div>

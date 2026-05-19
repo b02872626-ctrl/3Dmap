@@ -680,11 +680,42 @@ function makeLabelTexture(text) {
   return tex;
 }
 
-// Labels in-world were removed — info is now shown via the cursor tooltip
-// (rendered in the DOM by main.js). These helpers stay as no-ops so the
-// build code doesn't need to change shape.
-function addRoomLabel(/* group, room, cx, cz */) {}
-function addTextSprite(/* group, text, x, y, z, scale */) {}
+// In-world pill labels (rendered as billboards). Hidden by default —
+// main.js shows them on mobile / touch devices where there's no hover
+// mechanism for the cursor tooltip.
+function addRoomLabel(group, room, cx, cz) {
+  if (room.entrance || room.icon) return;
+  const { w, d } = room.footprint;
+  const min = Math.min(w, d);
+  if (min < 1.8) return;
+  const tex = makeLabelTexture(room.id);
+  const aspect = tex.image.width / tex.image.height;
+  const heightWorld = THREE.MathUtils.clamp(min * 0.13, 0.5, 0.78);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false, depthWrite: false,
+  }));
+  sprite.scale.set(heightWorld * aspect, heightWorld, 1);
+  sprite.position.set(cx, FLOOR_THICK + 1.6, cz);
+  sprite.renderOrder = 1000;
+  sprite.userData.isLabel = true;
+  sprite.visible = false;       // toggled by main.js based on viewport
+  group.add(sprite);
+}
+
+function addTextSprite(group, text, x, y, z, scale) {
+  const tex = makeLabelTexture(text);
+  const aspect = tex.image.width / tex.image.height;
+  const heightWorld = scale * 0.62;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false, depthWrite: false,
+  }));
+  sprite.scale.set(heightWorld * aspect, heightWorld, 1);
+  sprite.position.set(x, y, z);
+  sprite.renderOrder = 1000;
+  sprite.userData.isLabel = true;
+  sprite.visible = false;
+  group.add(sprite);
+}
 
 // =============================================================
 //  FBX swap hook (unchanged contract)
