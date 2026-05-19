@@ -1,0 +1,708 @@
+// =============================================================
+//  Build floors as architectural spaces, not solid boxes:
+//  · per-room colored floor tile
+//  · walls only on exterior sides (computed via adjacency)
+//  · interior props per category (pedestals, columns, tree…)
+//  · room number labels on the floor
+//  Each room becomes a THREE.Group with userData.kind === "room".
+//  Hovering / clicking walks up from any hit child to that group.
+// =============================================================
+import * as THREE from "three";
+import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS } from "./data.js";
+
+const SLAB_PAD       = 1.0;
+const SLAB_THICK     = 0.4;
+const FLOOR_THICK    = 0.12;
+const WALL_HEIGHT    = 1.9;
+const WALL_THICK     = 0.18;
+const TALL_BOOST     = 2.4;   // extra height for great hall walls
+const SLAB_COLOR     = 0xefebdf;  // off-white slab — contrasts with dark env
+const WALL_COLOR     = 0xd6cdba;  // warm gray-beige walls (darker than slab)
+const TRIM_COLOR     = 0x8d8474;  // contrasting dark trim cap
+const STONE_COLOR    = 0xb9af9a;  // columns / capitals / bases
+
+const planCenter = {
+  x: (PLAN_BOUNDS.minX + PLAN_BOUNDS.maxX) / 2,
+  z: (PLAN_BOUNDS.minZ + PLAN_BOUNDS.maxZ) / 2,
+};
+
+const offsetX = (x) => x - planCenter.x;
+const offsetZ = (z) => z - planCenter.z;
+
+// Shared materials (reuse for perf)
+const wallMat = new THREE.MeshStandardMaterial({
+  color: WALL_COLOR, roughness: 0.96, metalness: 0,
+});
+const wallCapMat = new THREE.MeshStandardMaterial({
+  color: TRIM_COLOR, roughness: 0.8, metalness: 0,
+});
+const pedestalMat = new THREE.MeshStandardMaterial({
+  color: 0xf4f1e8, roughness: 0.85, metalness: 0,
+});
+const woodMat = new THREE.MeshStandardMaterial({
+  color: 0x6b4a2b, roughness: 0.75, metalness: 0,
+});
+const benchMat = new THREE.MeshStandardMaterial({
+  color: 0x3a3128, roughness: 0.7, metalness: 0,
+});
+const stoneMat = new THREE.MeshStandardMaterial({
+  color: STONE_COLOR, roughness: 0.8, metalness: 0,
+});
+
+// =============================================================
+//  Adjacency: for each room, which sides share an edge with
+//  another room on the same floor? Walls are placed only on
+//  sides that DON'T have a neighbor (i.e. the building exterior).
+// =============================================================
+function buildAdjacency() {
+  const TOL = 0.05;
+  const adj = new Map();
+  for (const a of ROOMS) {
+    const sides = { N: false, S: false, E: false, W: false };
+    const ax1 = a.footprint.x, az1 = a.footprint.z;
+    const ax2 = ax1 + a.footprint.w, az2 = az1 + a.footprint.d;
+    for (const b of ROOMS) {
+      if (a === b || a.floor !== b.floor) continue;
+      const bx1 = b.footprint.x, bz1 = b.footprint.z;
+      const bx2 = bx1 + b.footprint.w, bz2 = bz1 + b.footprint.d;
+      const xOverlap = bx1 < ax2 - TOL && bx2 > ax1 + TOL;
+      const zOverlap = bz1 < az2 - TOL && bz2 > az1 + TOL;
+      if (Math.abs(bz2 - az1) < TOL && xOverlap) sides.N = true; // neighbor to the N
+      if (Math.abs(bz1 - az2) < TOL && xOverlap) sides.S = true;
+      if (Math.abs(bx2 - ax1) < TOL && zOverlap) sides.W = true;
+      if (Math.abs(bx1 - ax2) < TOL && zOverlap) sides.E = true;
+    }
+    adj.set(a.id, sides);
+  }
+  return adj;
+}
+
+// =============================================================
+//  Public: build full museum
+// =============================================================
+export function buildFloors() {
+  const root = new THREE.Group();
+  root.name = "museum";
+  const floorGroups = new Map();
+  const roomGroups = [];
+  const adjacency = buildAdjacency();
+
+  for (const floor of FLOORS) {
+    const group = new THREE.Group();
+    group.name = `floor-${floor.id}`;
+    group.userData = { floorId: floor.id, baseY: floor.y };
+    group.position.y = floor.y;
+
+    // Slab beneath the floor tiles
+    const slabW = (PLAN_BOUNDS.maxX - PLAN_BOUNDS.minX) + SLAB_PAD * 2;
+    const slabD = (PLAN_BOUNDS.maxZ - PLAN_BOUNDS.minZ) + SLAB_PAD * 2;
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(slabW, SLAB_THICK, slabD),
+      new THREE.MeshStandardMaterial({ color: SLAB_COLOR, roughness: 0.92, metalness: 0.02 })
+    );
+    slab.position.set(0, -SLAB_THICK / 2, 0);
+    slab.receiveShadow = true;
+    group.add(slab);
+
+    // Slab outline — soft ink line to define the building silhouette
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(slab.geometry),
+      new THREE.LineBasicMaterial({ color: 0x5a5044, transparent: true, opacity: 0.3 })
+    );
+    edges.position.copy(slab.position);
+    group.add(edges);
+
+    // Rooms
+    const roomsHere = ROOMS.filter((r) => r.floor === floor.id);
+    for (const room of roomsHere) {
+      const rg = buildRoom(room, adjacency.get(room.id));
+      group.add(rg);
+      roomGroups.push(rg);
+    }
+
+    floorGroups.set(floor.id, group);
+    root.add(group);
+  }
+
+  // ---- Post-pass: tag occluders that should participate in x-ray ----
+  // We iterate every floor group (so slabs are included, not just walls).
+  // An occluder is anything that could obscure the camera's view of what
+  // the user is focused on. We accept:
+  //   · "tall" meshes (walls, columns, elevators, bookshelves, paintings…)
+  //   · low but wide planar geometry: slabs and floor tiles
+  // Each gets a cloned material with transparent: true so we can vary
+  // opacity per mesh without affecting neighbours.
+  const occluders = [];
+  for (const fg of floorGroups.values()) {
+    fg.traverse((m) => {
+      if (!m.isMesh) return;
+      if (!m.geometry) return;
+      if (m.userData.xrayOccluder) return; // already done
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      const bb = m.geometry.boundingBox;
+      const height = bb.max.y - bb.min.y;
+      const cy = m.position.y;
+      const isTall  = cy > 0.6  && height > 0.45;
+      const isFloor = cy >= -0.5 && cy < 0.5 && height >= 0.1; // slabs + tiles
+      if (!isTall && !isFloor) return;
+      // Clone material so opacity is per-mesh
+      m.material = m.material.clone();
+      m.material.transparent = true;
+      m.material.depthWrite = true;
+      m.userData.xrayOccluder = true;
+      m.userData.baseOpacity = m.material.opacity ?? 1;
+      m.userData.floorGroup = fg;   // for "between floors" detection
+      occluders.push(m);
+    });
+  }
+
+  return { root, floorGroups, roomGroups, occluders };
+}
+
+// =============================================================
+//  Build one room (Group)
+// =============================================================
+function buildRoom(room, adj = { N: false, S: false, E: false, W: false }) {
+  const group = new THREE.Group();
+  const cat = CATEGORIES[room.category] || CATEGORIES.amenity;
+  const baseColor = new THREE.Color(cat.color);
+  const { x, z, w, d } = room.footprint;
+  const cx = offsetX(x + w / 2);
+  const cz = offsetZ(z + d / 2);
+
+  // -------- Floor tile --------
+  const tileInset = 0.04;
+  const tileW = Math.max(w - tileInset * 2, 0.3);
+  const tileD = Math.max(d - tileInset * 2, 0.3);
+  const tileMat = new THREE.MeshStandardMaterial({
+    color: baseColor,
+    roughness: 0.55,
+    metalness: 0.08,
+    emissive: baseColor.clone().multiplyScalar(0.08),
+  });
+  const tile = new THREE.Mesh(
+    new THREE.BoxGeometry(tileW, FLOOR_THICK, tileD),
+    tileMat
+  );
+  tile.position.set(cx, FLOOR_THICK / 2, cz);
+  tile.receiveShadow = true;
+  group.add(tile);
+
+  group.userData = {
+    kind: "room",
+    roomId: room.id,
+    room,
+    baseColor: baseColor.clone(),
+    originalEmissive: baseColor.clone().multiplyScalar(0.08),
+    tile,
+    highlightTargets: [tile],
+  };
+
+  // -------- Exterior walls (on sides without a neighbor) --------
+  const wantWalls = !room.open && !room.entrance;
+  const wallH = room.tall ? WALL_HEIGHT + TALL_BOOST : WALL_HEIGHT;
+
+  if (wantWalls) {
+    // helper: add a wall segment
+    const addWall = (geo, posX, posY, posZ) => {
+      const m = new THREE.Mesh(geo, wallMat);
+      m.position.set(posX, posY, posZ);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      group.add(m);
+      // Top cap (slightly wider, darker trim)
+      const cap = new THREE.Mesh(
+        new THREE.BoxGeometry(geo.parameters.width * 1.04, 0.06, geo.parameters.depth * 1.04),
+        wallCapMat
+      );
+      cap.position.set(posX, posY + wallH / 2 + 0.03, posZ);
+      cap.castShadow = true;
+      group.add(cap);
+    };
+    const yMid = FLOOR_THICK + wallH / 2;
+    // North wall (z = z), facing -z
+    if (!adj.N) {
+      addWall(
+        new THREE.BoxGeometry(w, wallH, WALL_THICK),
+        cx, yMid, offsetZ(z) - WALL_THICK / 2
+      );
+    }
+    if (!adj.S) {
+      addWall(
+        new THREE.BoxGeometry(w, wallH, WALL_THICK),
+        cx, yMid, offsetZ(z + d) + WALL_THICK / 2
+      );
+    }
+    if (!adj.W) {
+      addWall(
+        new THREE.BoxGeometry(WALL_THICK, wallH, d),
+        offsetX(x) - WALL_THICK / 2, yMid, cz
+      );
+    }
+    if (!adj.E) {
+      addWall(
+        new THREE.BoxGeometry(WALL_THICK, wallH, d),
+        offsetX(x + w) + WALL_THICK / 2, yMid, cz
+      );
+    }
+  }
+
+  // -------- Interior props --------
+  addProps(group, room, cx, cz, adj);
+
+  // -------- Floor label (room id) --------
+  addRoomLabel(group, room, cx, cz);
+
+  return group;
+}
+
+// =============================================================
+//  Props
+// =============================================================
+function addProps(group, room, cx, cz, adj) {
+  const y = FLOOR_THICK; // top of floor tile
+  const cat = room.category;
+
+  if (room.open || cat === "courtyard") {
+    addTree(group, cx, cz, y);
+    addBench(group, cx - 2.5, cz, y, 0);
+    addBench(group, cx + 2.5, cz, y, 0);
+    addPlanter(group, cx, cz - 2, y);
+    addPlanter(group, cx, cz + 2, y);
+    return;
+  }
+  if (room.entrance) {
+    addStairs(group, cx, cz, y, room);
+    return;
+  }
+  if (room.tall) {
+    // Great Hall: 4 columns + central round dais
+    const { w, d } = room.footprint;
+    const off = Math.min(w, d) * 0.32;
+    const colH = WALL_HEIGHT + TALL_BOOST;
+    addColumn(group, cx - off, cz - off, y, colH);
+    addColumn(group, cx + off, cz - off, y, colH);
+    addColumn(group, cx - off, cz + off, y, colH);
+    addColumn(group, cx + off, cz + off, y, colH);
+    addDais(group, cx, cz, y);
+    return;
+  }
+  if (room.icon) {
+    addElevator(group, room, cx, cz, y);
+    return;
+  }
+
+  switch (cat) {
+    case "african":   addPedestalWith(group, cx, cz, y, "totem"); break;
+    case "asian":     addPedestalWith(group, cx, cz, y, "vase");  break;
+    case "ancient":   addPedestalWith(group, cx, cz, y, "bust");  break;
+    case "modern":    addPedestalWith(group, cx, cz, y, "knot");  break;
+    case "american":  addPaintings(group, room, adj); addBench(group, cx, cz, y, 0); break;
+    case "european":  addPaintings(group, room, adj); addBench(group, cx, cz, y, 0); break;
+    case "exhibition":addPedestalWith(group, cx, cz, y, "cube");  break;
+    case "library":   addBookshelves(group, room); break;
+    case "amenity":   addKiosk(group, cx, cz, y); break;
+    default: break;
+  }
+}
+
+// ---- props library ----
+function addPedestalWith(group, cx, cz, y, kind) {
+  const ped = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.9, 0.7),
+    pedestalMat
+  );
+  ped.position.set(cx, y + 0.45, cz);
+  ped.castShadow = true;
+  ped.receiveShadow = true;
+  group.add(ped);
+
+  let obj;
+  const topY = y + 0.9;
+  if (kind === "totem") {
+    obj = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.18, 0.85, 8),
+      new THREE.MeshStandardMaterial({ color: 0x5b3a25, roughness: 0.75 })
+    );
+    obj.position.set(cx, topY + 0.42, cz);
+  } else if (kind === "vase") {
+    obj = new THREE.Mesh(
+      new THREE.LatheGeometry(
+        [[0.0, 0], [0.18, 0.05], [0.22, 0.2], [0.16, 0.35], [0.08, 0.5]]
+          .map(([r, h]) => new THREE.Vector2(r, h)),
+        16
+      ),
+      new THREE.MeshStandardMaterial({ color: 0x7d8b66, roughness: 0.4, metalness: 0.2 })
+    );
+    obj.position.set(cx, topY, cz);
+  } else if (kind === "bust") {
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 16, 12),
+      stoneMat
+    );
+    head.position.set(cx, topY + 0.35, cz);
+    head.castShadow = true;
+    group.add(head);
+    obj = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.22, 0.28, 12),
+      stoneMat
+    );
+    obj.position.set(cx, topY + 0.14, cz);
+  } else if (kind === "knot") {
+    obj = new THREE.Mesh(
+      new THREE.TorusKnotGeometry(0.2, 0.06, 64, 8),
+      new THREE.MeshStandardMaterial({ color: 0xe04a2b, roughness: 0.3, metalness: 0.5 })
+    );
+    obj.position.set(cx, topY + 0.28, cz);
+  } else if (kind === "cube") {
+    obj = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 0.35, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0xa9b1bd, roughness: 0.6 })
+    );
+    obj.position.set(cx, topY + 0.18, cz);
+  }
+  if (obj) {
+    obj.castShadow = true;
+    group.add(obj);
+  }
+}
+
+function addBench(group, cx, cz, y, rotY = 0) {
+  const seat = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.1, 0.4),
+    benchMat
+  );
+  seat.position.set(cx, y + 0.45, cz);
+  seat.rotation.y = rotY;
+  seat.castShadow = true;
+  group.add(seat);
+  // legs
+  for (const dx of [-0.65, 0.65]) {
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.4, 0.36),
+      benchMat
+    );
+    const ox = Math.cos(rotY) * dx;
+    const oz = Math.sin(rotY) * dx;
+    leg.position.set(cx + ox, y + 0.2, cz + oz);
+    leg.rotation.y = rotY;
+    leg.castShadow = true;
+    group.add(leg);
+  }
+}
+
+function addColumn(group, cx, cz, y, height) {
+  const col = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.32, 0.34, height, 16),
+    stoneMat
+  );
+  col.position.set(cx, y + height / 2, cz);
+  col.castShadow = true;
+  col.receiveShadow = true;
+  group.add(col);
+  // capital
+  const cap = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.18, 0.9),
+    wallCapMat
+  );
+  cap.position.set(cx, y + height - 0.09, cz);
+  cap.castShadow = true;
+  group.add(cap);
+  // base
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(0.8, 0.12, 0.8),
+    wallCapMat
+  );
+  base.position.set(cx, y + 0.06, cz);
+  group.add(base);
+}
+
+function addDais(group, cx, cz, y) {
+  const dais = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.6, 1.6, 0.12, 32),
+    new THREE.MeshStandardMaterial({ color: 0xc7bda8, roughness: 0.8 })
+  );
+  dais.position.set(cx, y + 0.06, cz);
+  dais.receiveShadow = true;
+  group.add(dais);
+}
+
+function addStairs(group, cx, cz, y, room) {
+  const w = room.footprint.w;
+  const steps = 5;
+  for (let i = 0; i < steps; i++) {
+    const step = new THREE.Mesh(
+      new THREE.BoxGeometry(w * 0.9, 0.12, 0.45),
+      stoneMat
+    );
+    step.position.set(cx, y + 0.06 + i * 0.12, cz + (i - (steps - 1) / 2) * 0.45);
+    step.castShadow = true;
+    step.receiveShadow = true;
+    group.add(step);
+  }
+}
+
+function addElevator(group, room, cx, cz, y) {
+  const w = Math.max(room.footprint.w * 0.7, 1.6);
+  const d = Math.max(room.footprint.d * 0.7, 1.6);
+  const h = 2.6;
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color: 0x4c5562, roughness: 0.6, metalness: 0.2 })
+  );
+  box.position.set(cx, y + h / 2, cz);
+  box.castShadow = true;
+  box.receiveShadow = true;
+  group.add(box);
+  // door panel
+  const door = new THREE.Mesh(
+    new THREE.PlaneGeometry(w * 0.5, h * 0.7),
+    new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: 0.4, metalness: 0.6 })
+  );
+  door.position.set(cx, y + h * 0.4, cz + d / 2 + 0.01);
+  group.add(door);
+  // letter label on top
+  addTextSprite(group, room.icon || "?", cx, y + h + 0.4, cz, 0.9, 0xffffff);
+}
+
+function addPaintings(group, room, adj) {
+  // Mount a row of small paintings on whichever exterior wall is longest
+  const sides = [
+    { name: "N", has: !adj.N, len: room.footprint.w, normal: [0, -1] },
+    { name: "S", has: !adj.S, len: room.footprint.w, normal: [0,  1] },
+    { name: "W", has: !adj.W, len: room.footprint.d, normal: [-1, 0] },
+    { name: "E", has: !adj.E, len: room.footprint.d, normal: [ 1, 0] },
+  ].filter((s) => s.has).sort((a, b) => b.len - a.len);
+
+  if (sides.length === 0) return;
+  const side = sides[0];
+  const { x, z, w, d } = room.footprint;
+  const cx = offsetX(x + w / 2);
+  const cz = offsetZ(z + d / 2);
+  const yMid = FLOOR_THICK + 1.1;
+
+  // Lay 2 small paintings along this wall
+  const count = Math.max(2, Math.min(3, Math.floor(side.len / 1.8)));
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.5) / count - 0.5; // -0.5..0.5
+    const along = t * (side.len - 0.6);
+    let px, pz, rot;
+    if (side.name === "N") { px = cx + along; pz = offsetZ(z) + 0.02; rot = 0; }
+    else if (side.name === "S") { px = cx + along; pz = offsetZ(z + d) - 0.02; rot = Math.PI; }
+    else if (side.name === "W") { px = offsetX(x) + 0.02; pz = cz + along; rot = Math.PI / 2; }
+    else { px = offsetX(x + w) - 0.02; pz = cz + along; rot = -Math.PI / 2; }
+
+    const frame = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.7, 0.5),
+      new THREE.MeshStandardMaterial({
+        color: 0x000000, roughness: 0.7,
+        emissive: 0x1a1a1a,
+      })
+    );
+    frame.position.set(px, yMid, pz);
+    frame.rotation.y = rot;
+    group.add(frame);
+    // gold frame trim
+    const trim = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.78, 0.58),
+      new THREE.MeshStandardMaterial({ color: 0xa68a52, roughness: 0.4, metalness: 0.6 })
+    );
+    trim.position.set(px, yMid, pz);
+    trim.rotation.y = rot;
+    trim.position.x += Math.sin(rot) * -0.005;
+    trim.position.z += Math.cos(rot) * -0.005;
+    group.add(trim);
+    frame.position.x += Math.sin(rot) * 0.005;
+    frame.position.z += Math.cos(rot) * 0.005;
+  }
+}
+
+function addBookshelves(group, room) {
+  const { x, z, w, d } = room.footprint;
+  const cx = offsetX(x + w / 2);
+  const cz = offsetZ(z + d / 2);
+  // ring of shelves around perimeter
+  const shelfH = 1.4;
+  const shelfThick = 0.3;
+  const inset = 0.4;
+  const long = new THREE.MeshStandardMaterial({ color: 0x5c3a22, roughness: 0.85 });
+  // 4 shelves along the 4 walls
+  const a = new THREE.Mesh(new THREE.BoxGeometry(w - inset * 2, shelfH, shelfThick), long);
+  a.position.set(cx, FLOOR_THICK + shelfH / 2, offsetZ(z) + inset);
+  a.castShadow = true; group.add(a);
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w - inset * 2, shelfH, shelfThick), long);
+  b.position.set(cx, FLOOR_THICK + shelfH / 2, offsetZ(z + d) - inset);
+  b.castShadow = true; group.add(b);
+  const c = new THREE.Mesh(new THREE.BoxGeometry(shelfThick, shelfH, d - inset * 2), long);
+  c.position.set(offsetX(x) + inset, FLOOR_THICK + shelfH / 2, cz);
+  c.castShadow = true; group.add(c);
+  const e = new THREE.Mesh(new THREE.BoxGeometry(shelfThick, shelfH, d - inset * 2), long);
+  e.position.set(offsetX(x + w) - inset, FLOOR_THICK + shelfH / 2, cz);
+  e.castShadow = true; group.add(e);
+}
+
+function addKiosk(group, cx, cz, y) {
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(0.6, 1.1, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x2c333d, roughness: 0.6, metalness: 0.3 })
+  );
+  base.position.set(cx, y + 0.55, cz);
+  base.castShadow = true;
+  group.add(base);
+  // screen
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.35),
+    new THREE.MeshStandardMaterial({
+      color: 0x67c8ff, emissive: 0x67c8ff, emissiveIntensity: 0.7, roughness: 0.2,
+    })
+  );
+  screen.position.set(cx, y + 1.0, cz + 0.305);
+  group.add(screen);
+}
+
+function addTree(group, cx, cz, y) {
+  // trunk
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.22, 1.2, 8),
+    woodMat
+  );
+  trunk.position.set(cx, y + 0.6, cz);
+  trunk.castShadow = true;
+  group.add(trunk);
+  // foliage (cluster of spheres)
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4f8a4f, roughness: 0.8 });
+  const positions = [
+    [0, 1.4, 0, 0.9],
+    [0.5, 1.6, 0.2, 0.6],
+    [-0.45, 1.55, -0.15, 0.55],
+    [0.1, 1.9, -0.3, 0.5],
+  ];
+  for (const [dx, dy, dz, r] of positions) {
+    const leaf = new THREE.Mesh(
+      new THREE.SphereGeometry(r, 16, 12),
+      leafMat
+    );
+    leaf.position.set(cx + dx, y + dy, cz + dz);
+    leaf.castShadow = true;
+    leaf.receiveShadow = true;
+    group.add(leaf);
+  }
+}
+
+function addPlanter(group, cx, cz, y) {
+  const planter = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.35, 0.4, 0.4, 16),
+    new THREE.MeshStandardMaterial({ color: 0x8a7560, roughness: 0.9 })
+  );
+  planter.position.set(cx, y + 0.2, cz);
+  planter.castShadow = true;
+  group.add(planter);
+  const shrub = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0x6aa367, roughness: 0.85 })
+  );
+  shrub.position.set(cx, y + 0.6, cz);
+  shrub.castShadow = true;
+  group.add(shrub);
+}
+
+// =============================================================
+//  Floor labels (room id rendered on a canvas texture)
+// =============================================================
+const labelCache = new Map();
+function makeLabelTexture(text) {
+  if (labelCache.has(text)) return labelCache.get(text);
+  const canvas = document.createElement("canvas");
+  canvas.width = 256; canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 256, 128);
+  ctx.font = "700 78px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  // Dark stroke so the label reads against any floor tile color
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(20,20,20,0.55)";
+  ctx.strokeText(text, 128, 70);
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.fillText(text, 128, 70);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  labelCache.set(text, tex);
+  return tex;
+}
+
+function addRoomLabel(group, room, cx, cz) {
+  if (room.entrance || room.icon) return; // these get their own text
+  const { w, d } = room.footprint;
+  const min = Math.min(w, d);
+  if (min < 1.8) return;
+  // bias to a corner away from the pedestal so it doesn't clip
+  const labelW = Math.min(min * 0.6, 1.6);
+  const labelH = labelW * 0.5;
+  const plane = new THREE.Mesh(
+    new THREE.PlaneGeometry(labelW, labelH),
+    new THREE.MeshBasicMaterial({
+      map: makeLabelTexture(room.id),
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.85,
+    })
+  );
+  plane.rotation.x = -Math.PI / 2;
+  // offset to top-left quadrant of the room
+  const ox = -w * 0.25;
+  const oz = -d * 0.25;
+  plane.position.set(cx + ox, FLOOR_THICK + 0.015, cz + oz);
+  group.add(plane);
+}
+
+function addTextSprite(group, text, x, y, z, scale, color = 0xffffff) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.font = "800 92px ui-sans-serif, system-ui, sans-serif";
+  ctx.fillStyle = "#" + color.toString(16).padStart(6, "0");
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 64, 70);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
+  );
+  sprite.scale.set(scale, scale, 1);
+  sprite.position.set(x, y, z);
+  group.add(sprite);
+}
+
+// =============================================================
+//  FBX swap hook (unchanged contract)
+// =============================================================
+export function tryReplaceWithFBX(loader, floorId, floorGroups, url) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(false);
+    loader.load(
+      url,
+      (object) => {
+        const group = floorGroups.get(floorId);
+        if (!group) return resolve(false);
+        while (group.children.length) group.remove(group.children[0]);
+        object.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        group.add(object);
+        resolve(true);
+      },
+      undefined,
+      (err) => {
+        console.warn(`FBX load failed for floor ${floorId}:`, err);
+        resolve(false);
+      }
+    );
+  });
+}

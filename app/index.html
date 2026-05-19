@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAM · 3D Visitor Guide</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+
+  <!-- Top bar: brand + search -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">✻</span>
+      <div class="brand-text">
+        <strong>Cincinnati Art Museum</strong>
+        <em>3D Visitor Guide</em>
+      </div>
+    </div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M10 2a8 8 0 1 1-5.3 14L1 19.7 2.3 21l3.7-3.7A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
+      <input id="search-input" type="text" placeholder="Search galleries, amenities…" autocomplete="off" />
+      <ul id="search-results"></ul>
+    </div>
+    <button id="open-directions" class="topbar-btn" title="Get directions">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4zM9 14v-3h4V8.5l3.5 3-3.5 3V14H10v.01z"/></svg>
+      <span>Directions</span>
+    </button>
+  </header>
+
+  <!-- Directions panel (left, opens via button) -->
+  <section class="directions" id="directions" aria-hidden="true">
+    <div class="directions-header">
+      <h3>Directions</h3>
+      <button id="dir-close" class="icon-btn" aria-label="Close">×</button>
+    </div>
+
+    <div class="dir-slot" data-slot="start">
+      <span class="dir-dot start"></span>
+      <input id="dir-start-label" type="text" placeholder="Choose start point" readonly />
+      <button class="dir-clear" data-slot="start" aria-label="Clear start">×</button>
+    </div>
+
+    <div class="dir-line"></div>
+
+    <div class="dir-slot" data-slot="end">
+      <span class="dir-dot end"></span>
+      <input id="dir-end-label" type="text" placeholder="Choose destination" readonly />
+      <button class="dir-clear" data-slot="end" aria-label="Clear destination">×</button>
+    </div>
+
+    <div class="dir-actions">
+      <button id="dir-swap" class="ghost-btn" title="Swap start and destination">↑↓ Swap</button>
+      <button id="dir-clear-all" class="ghost-btn">Clear route</button>
+    </div>
+
+    <div class="dir-summary" id="dir-summary"></div>
+    <div class="dir-hint" id="dir-hint">Click any room to set the highlighted point.</div>
+
+    <div class="dir-steps" id="dir-steps" aria-hidden="true"></div>
+  </section>
+
+  <!-- Floor switcher (right) -->
+  <aside class="floor-switcher">
+    <button data-floor="all" class="active" title="Show all floors stacked">All</button>
+    <button data-floor="3"   title="Third Floor">3</button>
+    <button data-floor="2"   title="Second Floor">2</button>
+    <button data-floor="1"   title="First Floor">1</button>
+    <hr />
+    <button id="toggle-explode" title="Toggle exploded view">⇕</button>
+    <button id="reset-cam"     title="Reset camera">⟲</button>
+  </aside>
+
+  <!-- Category filter (left) -->
+  <aside class="legend" id="legend">
+    <h3>Collections</h3>
+    <ul id="legend-list"></ul>
+  </aside>
+
+  <!-- Details panel (bottom-right slide-in) -->
+  <section class="details" id="details" aria-hidden="true">
+    <button class="close" id="details-close" aria-label="Close">×</button>
+    <span class="chip" id="details-chip">—</span>
+    <h2 id="details-title">Select a gallery</h2>
+    <p id="details-sub">Tap a room on the map to see details.</p>
+    <dl id="details-meta"></dl>
+    <div class="details-actions">
+      <button id="details-directions" class="primary-btn">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4zM9 14v-3h4V8.5l3.5 3-3.5 3V14H10v.01z"/></svg>
+        Get Directions
+      </button>
+    </div>
+  </section>
+
+  <!-- Hover tooltip -->
+  <div class="tooltip" id="tooltip" aria-hidden="true"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader"><div class="spinner"></div><span>Building map…</span></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+Drop your FBX files in this directory.
+
+Naming convention used by the app:
+  models/floor1.fbx   → replaces procedural geometry of First Floor
+  models/floor2.fbx   → replaces procedural geometry of Second Floor
+  models/floor3.fbx   → replaces procedural geometry of Third Floor
+
+To activate, open app/js/data.js and set the `fbx` field on each FLOORS entry:
+
+  { id: 1, label: "First Floor",  y: 0,  height: 4.2, fbx: "models/floor1.fbx" },
+  { id: 2, label: "Second Floor", y: 6,  height: 4.0, fbx: "models/floor2.fbx" },
+  { id: 3, label: "Third Floor",  y: 12, height: 3.8, fbx: "models/floor3.fbx" },
+
+The app will:
+  • Remove the procedural extruded rooms for that floor
+  • Add your FBX in their place, with shadows enabled
+  • Keep the floor group's transform (so floor-switcher / explode still work)
+
+If you want per-room picking on FBX geometry, name your meshes inside the FBX
+to match the room ids in app/js/data.js (e.g. "101", "greatHall", "elevA"...).
+We'll wire that in once your files arrive.
