@@ -1,0 +1,9 @@
+# Static site — no build step, just publish the app/ directory.
+[build]
+  publish = "app"
+
+# SPA-style fallback so deep links resolve to index.html
+[[redirects]]
+  from = "/*"
+  to   = "/index.html"
+  status = 200
