@@ -607,27 +607,75 @@ function addPlanter(group, cx, cz, y) {
 }
 
 // =============================================================
-//  Floor labels (room id rendered on a canvas texture)
+//  Pill-style labels — rounded badge with light bg + black text,
+//  rendered as billboard sprites so they always face the camera.
 // =============================================================
 const labelCache = new Map();
+
+// Local polyfill for ctx.roundRect (older Safari)
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
 function makeLabelTexture(text) {
   if (labelCache.has(text)) return labelCache.get(text);
+
+  const fontSize = 56;
+  const paddingX = 30;
+  const paddingY = 14;
+  const fontSpec = `700 ${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+
+  // Pre-measure on a throwaway context to size the pill
+  const m = document.createElement("canvas").getContext("2d");
+  m.font = fontSpec;
+  const textWidth = Math.ceil(m.measureText(text).width);
+
   const canvas = document.createElement("canvas");
-  canvas.width = 256; canvas.height = 128;
+  // Min canvas height = ensure full pill curve even for 1-char labels
+  canvas.height = fontSize + paddingY * 2;
+  canvas.width  = Math.max(textWidth + paddingX * 2, canvas.height);
   const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, 256, 128);
-  ctx.font = "700 78px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign = "center";
+  const r = canvas.height / 2;
+
+  // Soft drop shadow under the pill
+  ctx.shadowColor   = "rgba(0,0,0,0.30)";
+  ctx.shadowBlur    = 10;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = "rgba(234, 234, 234, 0.97)";
+  roundRectPath(ctx, 0, 0, canvas.width, canvas.height, r);
+  ctx.fill();
+
+  // Reset shadow before stroke + text
+  ctx.shadowColor   = "transparent";
+  ctx.shadowBlur    = 0;
+  ctx.shadowOffsetY = 0;
+
+  // Hairline edge for definition over bright floor tiles
+  ctx.lineWidth   = 1.5;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.10)";
+  roundRectPath(ctx, 0.75, 0.75, canvas.width - 1.5, canvas.height - 1.5, r - 0.75);
+  ctx.stroke();
+
+  // Black text
+  ctx.fillStyle    = "rgba(18, 18, 18, 0.94)";
+  ctx.font         = fontSpec;
+  ctx.textAlign    = "center";
   ctx.textBaseline = "middle";
-  // Dark stroke so the label reads against any floor tile color
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = "rgba(20,20,20,0.55)";
-  ctx.strokeText(text, 128, 70);
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.fillText(text, 128, 70);
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   labelCache.set(text, tex);
   return tex;
 }
@@ -637,43 +685,42 @@ function addRoomLabel(group, room, cx, cz) {
   const { w, d } = room.footprint;
   const min = Math.min(w, d);
   if (min < 1.8) return;
-  // bias to a corner away from the pedestal so it doesn't clip
-  const labelW = Math.min(min * 0.6, 1.6);
-  const labelH = labelW * 0.5;
-  const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(labelW, labelH),
-    new THREE.MeshBasicMaterial({
-      map: makeLabelTexture(room.id),
-      transparent: true,
-      depthWrite: false,
-      opacity: 0.85,
-    })
-  );
-  plane.rotation.x = -Math.PI / 2;
-  // offset to top-left quadrant of the room
-  const ox = -w * 0.25;
-  const oz = -d * 0.25;
-  plane.position.set(cx + ox, FLOOR_THICK + 0.015, cz + oz);
-  group.add(plane);
+
+  const tex = makeLabelTexture(room.id);
+  const aspect = tex.image.width / tex.image.height;
+  // Slightly smaller pills in tight rooms, larger in halls
+  const heightWorld = THREE.MathUtils.clamp(min * 0.13, 0.5, 0.78);
+  const widthWorld  = heightWorld * aspect;
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  sprite.scale.set(widthWorld, heightWorld, 1);
+  // Float just above sculpture/pedestal height so the badge reads as
+  // "marker for this room", not "sticker on the floor".
+  sprite.position.set(cx, FLOOR_THICK + 1.6, cz);
+  sprite.renderOrder = 1000;
+  group.add(sprite);
 }
 
-function addTextSprite(group, text, x, y, z, scale, color = 0xffffff) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128; canvas.height = 128;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, 128, 128);
-  ctx.font = "800 92px ui-sans-serif, system-ui, sans-serif";
-  ctx.fillStyle = "#" + color.toString(16).padStart(6, "0");
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, 64, 70);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })
-  );
-  sprite.scale.set(scale, scale, 1);
+function addTextSprite(group, text, x, y, z, scale /*, color */) {
+  const tex = makeLabelTexture(text);
+  const aspect = tex.image.width / tex.image.height;
+  const heightWorld = scale * 0.62;
+  const widthWorld  = heightWorld * aspect;
+
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  sprite.scale.set(widthWorld, heightWorld, 1);
   sprite.position.set(x, y, z);
+  sprite.renderOrder = 1000;
   group.add(sprite);
 }
 
