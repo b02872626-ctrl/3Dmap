@@ -272,10 +272,10 @@ export function describePath(pathNodes) {
       : `Advance to Elevator ${seg.nodes[seg.nodes.length - 1]?.room?.icon ?? ""}`.trim();
     const section = { title: headerLabel, floor: seg.floor, steps: [] };
 
-    const segSteps = describeFloorSegment(seg.nodes);
+    const segSteps = describeFloorSegment(seg.nodes, seg.floor);
     totalDistance += segSteps.distance;
     section.steps.push(...segSteps.steps);
-    flatSteps.push(...segSteps.steps.map((st) => ({ ...st, floor: seg.floor })));
+    flatSteps.push(...segSteps.steps);
 
     // Elevator transition between segments
     if (!isLastSegment) {
@@ -288,9 +288,14 @@ export function describePath(pathNodes) {
         text: `Take Elevator ${letter} to Floor ${nextFloor}`,
         fromFloor: seg.floor,
         toFloor: nextFloor,
+        floor: seg.floor,
+        startX: elevatorNode?.x ?? 0,
+        startZ: elevatorNode?.z ?? 0,
+        endX: elevatorNode?.x ?? 0,
+        endZ: elevatorNode?.z ?? 0,
       };
       section.steps.push(elevatorStep);
-      flatSteps.push({ ...elevatorStep, floor: seg.floor });
+      flatSteps.push(elevatorStep);
       elevators.push(letter);
     }
     sections.push(section);
@@ -304,9 +309,13 @@ export function describePath(pathNodes) {
     text: `Finally, reach ${last.room?.name ?? "destination"}`,
     floor: last.floor,
     floorLabel: `On floor ${last.floor}`,
+    startX: last.x,
+    startZ: last.z,
+    endX: last.x,
+    endZ: last.z,
   };
   sections[sections.length - 1].steps.push(arrive);
-  flatSteps.push({ ...arrive, floor: last.floor });
+  flatSteps.push(arrive);
 
   return {
     sections,
@@ -317,7 +326,7 @@ export function describePath(pathNodes) {
   };
 }
 
-function describeFloorSegment(nodes) {
+function describeFloorSegment(nodes, floor) {
   if (nodes.length < 2) return { steps: [], distance: 0 };
 
   // 1. Simplify consecutive collinear points (kills tiny zig-zags from
@@ -325,11 +334,14 @@ function describeFloorSegment(nodes) {
   const simplified = simplifyPolyline(nodes, 0.09); // ~5° tolerance
 
   // 2. Walk the polyline, emit "(turn) and go ahead for X m" steps.
+  //    Each step records the start position + bearing of the straight
+  //    segment it represents, so the UI can fly to it on click.
   const steps = [];
   let distance = 0;
   let lastBearing = null;
   let pendingTurn = null;
   let runningDist = 0;
+  let segmentStart = simplified[0];
   let stepIndex = 0;
 
   for (let i = 0; i < simplified.length - 1; i++) {
@@ -348,18 +360,30 @@ function describeFloorSegment(nodes) {
       const turn = classifyTurn(diff);
       if (turn) {
         if (runningDist > 0) {
-          steps.push(formatStep(pendingTurn, runningDist, stepIndex++));
+          steps.push(formatStep(pendingTurn, runningDist, stepIndex++, {
+            startX: segmentStart.x, startZ: segmentStart.z,
+            endX:   a.x,            endZ:   a.z,
+            bearing: lastBearing,
+            floor,
+          }));
           distance += runningDist;
           runningDist = 0;
         }
         pendingTurn = turn;
+        segmentStart = a;
       }
     }
     runningDist += d;
     lastBearing = bearing;
   }
   if (runningDist > 0) {
-    steps.push(formatStep(pendingTurn, runningDist, stepIndex++));
+    const tail = simplified[simplified.length - 1];
+    steps.push(formatStep(pendingTurn, runningDist, stepIndex++, {
+      startX: segmentStart.x, startZ: segmentStart.z,
+      endX:   tail.x,         endZ:   tail.z,
+      bearing: lastBearing,
+      floor,
+    }));
     distance += runningDist;
   }
   return { steps, distance };
@@ -393,10 +417,11 @@ function classifyTurn(diffRad) {
   return { dir, intensity, deg };
 }
 
-function formatStep(turn, dist, index) {
+function formatStep(turn, dist, index, pos) {
   const dStr = `${dist.toFixed(0)} m`;
+  const base = pos ? { ...pos } : {};
   if (!turn) {
-    return { kind: "walk", icon: "↑", text: `Go forward ${dStr}` };
+    return { kind: "walk", icon: "↑", text: `Go forward ${dStr}`, ...base };
   }
   const slight = turn.intensity === "slight";
   const sharp  = turn.intensity === "sharp";
@@ -412,6 +437,7 @@ function formatStep(turn, dist, index) {
     icon,
     direction: turn.dir,
     text: `${prefix}${prefix ? verb : capitalize(verb)} ${turn.dir} and go ahead for ${dStr}`,
+    ...base,
   };
 }
 

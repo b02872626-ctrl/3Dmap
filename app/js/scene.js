@@ -30,8 +30,12 @@ export function createScene(canvas) {
   // ---------------- Camera (perspective with isometric framing) ----------------
   const aspect = window.innerWidth / window.innerHeight;
   const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 500);
-  const cx = (PLAN_BOUNDS.minX + PLAN_BOUNDS.maxX) / 2;
-  const cz = (PLAN_BOUNDS.minZ + PLAN_BOUNDS.maxZ) / 2;
+  // The model is rendered plan-centered, so world origin is the slab center.
+  // main.js overrides this with a precise frameInitialView() once the floors
+  // are built, but we set a reasonable default so the canvas isn't empty
+  // before that runs.
+  const cx = 0;
+  const cz = 0;
   camera.position.set(cx + 50, 55, cz + 50);
   camera.lookAt(cx, 6, cz);
 

@@ -24,6 +24,7 @@ export function createRouteLayer(scene, floorGroups) {
   const pulseObjects    = [];      // markers to pulse
   /** @type {{mesh:THREE.Mesh, fromFloor:number, toFloor:number, x:number, z:number, baseHeight:number}[]} */
   const risers          = [];      // vertical elevator visuals
+  let   stepArrowRef    = null;    // current "this is your step" focus marker
 
   function clear() {
     // Remove anything we previously added to floor groups
@@ -42,6 +43,7 @@ export function createRouteLayer(scene, floorGroups) {
     animatedTextures.length = 0;
     pulseObjects.length = 0;
     risers.length = 0;
+    stepArrowRef = null;
   }
 
   /**
@@ -229,7 +231,136 @@ export function createRouteLayer(scene, floorGroups) {
     }
   }
 
-  return { draw, clear, animate };
+  // -----------------------------------------------------------------
+  //  Step focus: drop a big glowing arrow at the start of a step so the
+  //  user sees exactly where on the route that instruction applies.
+  // -----------------------------------------------------------------
+  function clearStepArrow() {
+    if (!stepArrowRef) return;
+    const idx = pulseObjects.findIndex((p) => p.obj === stepArrowRef);
+    if (idx >= 0) pulseObjects.splice(idx, 1);
+    stepArrowRef.parent?.remove(stepArrowRef);
+    disposeDeep(stepArrowRef);
+    stepArrowRef = null;
+  }
+
+  function showStepArrow(step) {
+    clearStepArrow();
+    if (!step) return;
+    const fg = floorGroups.get(step.floor);
+    if (!fg) return;
+    if (step.startX === undefined || step.startZ === undefined) return;
+
+    let marker;
+    if (step.kind === "arrive") {
+      // Destination — pulsing magenta orb on a pole
+      marker = makeBigMarker(0xff4d6a);
+    } else if (step.kind === "elevator") {
+      // Elevator — vertical "▲" sprite (already used in risers)
+      marker = makeBigElevatorMarker();
+    } else {
+      // Walking / turn — big forward-pointing arrow
+      marker = makeBigArrow();
+      if (step.bearing !== undefined && step.bearing !== null) {
+        marker.rotation.y = step.bearing;
+      }
+    }
+    marker.position.set(step.startX, 0.55, step.startZ);
+    marker.userData.isRoute = true;
+    marker.userData.isStepArrow = true;
+    fg.add(marker);
+    stepArrowRef = marker;
+    pulseObjects.push({ obj: marker, phase: 0 });
+  }
+
+  return { draw, clear, animate, showStepArrow, clearStepArrow };
+}
+
+function makeBigArrow() {
+  // Big flat arrow, ~3× the route's per-segment arrows
+  const shape = new THREE.Shape();
+  shape.moveTo(0, -0.95);
+  shape.lineTo(0.72, 0.10);
+  shape.lineTo(0.26, 0.10);
+  shape.lineTo(0.26, 0.78);
+  shape.lineTo(-0.26, 0.78);
+  shape.lineTo(-0.26, 0.10);
+  shape.lineTo(-0.72, 0.10);
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape);
+  const inner = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: PATH_COLOR,
+    transparent: true,
+    opacity: 1,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  }));
+  inner.rotation.x = -Math.PI / 2;
+
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry(1.4, 28),
+    new THREE.MeshBasicMaterial({
+      color: PATH_COLOR,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    }),
+  );
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.y = -0.01;
+
+  const outer = new THREE.Group();
+  outer.add(glow);
+  outer.add(inner);
+  return outer;
+}
+
+function makeBigMarker(color) {
+  const group = new THREE.Group();
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 20, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false }),
+  );
+  head.position.y = 1.4;
+  group.add(head);
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(1.1, 32),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 0.02;
+  group.add(halo);
+  return group;
+}
+
+function makeBigElevatorMarker() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 192; canvas.height = 192;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, 192, 192);
+  ctx.font = "800 160px ui-sans-serif, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fff4b3";
+  ctx.fillText("▲", 96, 106);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false,
+  }));
+  sprite.scale.set(1.6, 1.6, 1);
+  const group = new THREE.Group();
+  sprite.position.y = 1.1;
+  group.add(sprite);
+
+  const halo = new THREE.Mesh(
+    new THREE.CircleGeometry(1.0, 32),
+    new THREE.MeshBasicMaterial({ color: 0xff4d6a, transparent: true, opacity: 0.3, depthWrite: false }),
+  );
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 0.02;
+  group.add(halo);
+  return group;
 }
 
 // =============================================================

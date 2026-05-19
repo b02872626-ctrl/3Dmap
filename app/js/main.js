@@ -43,7 +43,7 @@ const routeLayer = createRouteLayer(scene, floorGroups);
 const FLOOR_GAP = 7;     // base stack
 const EXPLODE_GAP = 13;  // exploded stack
 
-let activeFloor = "all";
+let activeFloor = 1; // default view: ground floor
 let exploded = false;
 
 function applyFloorLayout() {
@@ -345,7 +345,12 @@ document.querySelectorAll(".floor-switcher [data-floor]").forEach((btn) => {
     btn.classList.add("active");
     const val = btn.dataset.floor;
     activeFloor = val === "all" ? "all" : parseInt(val, 10);
+    // Sync the mobile floor buttons too
+    document.querySelectorAll("[data-mobile-floor]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.mobileFloor === val),
+    );
     applyFloorLayout();
+    frameInitialView(true);
   });
 });
 
@@ -441,6 +446,50 @@ document.addEventListener("click", (e) => {
 // ---------------- Init layout, then start ----------------
 applyFloorLayout();
 applyCategoryFilter();
+frameInitialView();
+
+function frameInitialView(animate = false) {
+  // Compute the actual room-cluster bounds on the currently-visible floors,
+  // not the (much larger) slab. This way the camera lands on the gallery
+  // area, not on empty slab padding.
+  const floors = activeFloor === "all"
+    ? FLOORS.map((f) => f.id)
+    : [activeFloor];
+  const rooms = ROOMS.filter((r) => floors.includes(r.floor));
+  if (!rooms.length) return;
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const r of rooms) {
+    minX = Math.min(minX, r.footprint.x);
+    maxX = Math.max(maxX, r.footprint.x + r.footprint.w);
+    minZ = Math.min(minZ, r.footprint.z);
+    maxZ = Math.max(maxZ, r.footprint.z + r.footprint.d);
+  }
+  const cx = (minX + maxX) / 2 - PLAN_CENTER.x;
+  const cz = (minZ + maxZ) / 2 - PLAN_CENTER.z;
+  const span = Math.max(maxX - minX, maxZ - minZ);
+
+  // Distance proportional to span; clamped for sensible framing
+  const dist = THREE.MathUtils.clamp(span * 1.55, 36, 90);
+  const floorGroup = activeFloor === "all"
+    ? floorGroups.get(FLOORS[0].id)
+    : floorGroups.get(activeFloor);
+  const floorY = floorGroup ? floorGroup.position.y : 0;
+
+  const targetVec = new THREE.Vector3(cx, floorY + 3, cz);
+  const camVec    = new THREE.Vector3(
+    cx + dist * 0.62,
+    floorY + dist * 0.78,
+    cz + dist * 0.62,
+  );
+  if (animate) {
+    flyTo(targetVec, camVec, 55);
+  } else {
+    camera.position.copy(camVec);
+    controls.target.copy(targetVec);
+    controls.update();
+  }
+}
 
 setTimeout(() => {
   document.getElementById("loader").classList.add("hidden");
@@ -627,6 +676,11 @@ function recomputeRoute() {
         text.textContent = step.text;
       }
       row.append(icon, text);
+      row.addEventListener("click", () => {
+        document.querySelectorAll(".dir-step").forEach((r) => r.classList.remove("active"));
+        row.classList.add("active");
+        focusOnStep(step);
+      });
       sectionEl.appendChild(row);
     }
     dirStepsEl.appendChild(sectionEl);
@@ -653,6 +707,35 @@ function recomputeRoute() {
   }
 
   flyToRoutePoints(result.nodes);
+}
+
+function focusOnStep(step) {
+  if (!step || step.startX === undefined) return;
+  // Switch to the step's floor if we're focused on a different one
+  if (activeFloor !== "all" && activeFloor !== step.floor) {
+    activeFloor = step.floor;
+    document.querySelectorAll(".floor-switcher [data-floor]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.floor === String(step.floor)),
+    );
+    document.querySelectorAll("[data-mobile-floor]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.mobileFloor === String(step.floor)),
+    );
+    applyFloorLayout();
+  }
+  // Drop a big arrow/marker on the route at the step's start position
+  routeLayer.showStepArrow(step);
+
+  // Fly camera tight on that arrow, keeping the user's current orbital angle
+  const floorGroup = floorGroups.get(step.floor);
+  const floorY = floorGroup ? floorGroup.position.y : 0;
+  const target = new THREE.Vector3(step.startX, floorY + 1.6, step.startZ);
+  const dir = new THREE.Vector3()
+    .subVectors(camera.position, controls.target)
+    .normalize();
+  if (dir.y < 0.45) { dir.y = 0.45; dir.normalize(); }
+  const dist = 11;
+  const cameraPt = target.clone().add(dir.multiplyScalar(dist));
+  flyTo(target, cameraPt, 50);
 }
 
 function flyToRoutePoints(pathNodes) {
@@ -807,6 +890,7 @@ document.querySelectorAll("[data-mobile-floor]").forEach((btn) => {
       b.classList.toggle("active", b.dataset.floor === v),
     );
     applyFloorLayout();
+    frameInitialView(true);
     setDrawerOpen(false);
   });
 });
