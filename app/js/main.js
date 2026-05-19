@@ -173,7 +173,7 @@ canvas.addEventListener("pointermove", (e) => {
 // hasn't moved more than a few pixels. Anything beyond that is a drag
 // (orbit/pan/zoom) and should NOT trigger a room selection or directions
 // slot assignment.
-const CLICK_DRAG_THRESHOLD = 6; // pixels
+const CLICK_DRAG_THRESHOLD = 14; // pixels — generous enough for natural hand jitter
 let pointerDownInfo = null;
 
 canvas.addEventListener("pointerdown", (e) => {
@@ -258,15 +258,13 @@ let flyAnim = null;
 function flyToRoom(group) {
   const wp = new THREE.Vector3();
   group.getWorldPosition(wp);
-  // aim above the floor at roughly head/sculpture height — so the camera
-  // looks INTO the room rather than at its tile.
+  // Aim above the floor at roughly head/sculpture height
   const target = wp.clone();
   target.y += 1.8;
-  // Distance scales with room size, but capped so close-ups stay readable
-  // and big halls aren't clipped. Stays above OrbitControls.minDistance.
+  // Distance scales with room size — smaller rooms get a tighter close-up
   const fp = group.userData.room.footprint;
   const span = Math.max(fp.w, fp.d);
-  const dist = THREE.MathUtils.clamp(span * 1.9, 18, 32);
+  let dist = THREE.MathUtils.clamp(span * 1.8, 15, 26);
   // Preserve the camera's current orbital orientation so the user doesn't
   // get teleported to a different angle every click — only the focus point
   // and distance change.
@@ -278,6 +276,13 @@ function flyToRoom(group) {
   if (dir.y < 0.45) {
     dir.y = 0.45;
     dir.normalize();
+  }
+  // If we're being asked to fly to the same room twice (the destination is
+  // very close to where the camera already is), dolly in by ~25% so the
+  // user gets a visible response to their click.
+  const tentativeCameraPt = target.clone().add(dir.clone().multiplyScalar(dist));
+  if (tentativeCameraPt.distanceTo(camera.position) < 1.5) {
+    dist = Math.max(controls.minDistance + 0.5, dist * 0.72);
   }
   const cameraPt = target.clone().add(dir.multiplyScalar(dist));
   flyTo(target, cameraPt, 55);
