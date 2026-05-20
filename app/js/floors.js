@@ -155,7 +155,11 @@ export function buildFloors() {
       const bb = m.geometry.boundingBox;
       const height = bb.max.y - bb.min.y;
       const cy = m.position.y;
-      const isTall  = cy > 0.6  && height > 0.45;
+      // Lower thresholds so SMALL props (pedestals at cy ≈ 0.57, kiosk
+       // screens at h ≈ 0.35, bench legs, etc.) also fade — otherwise
+       // they stay solid while their parent walls turn transparent and
+       // become an awkward floating block.
+      const isTall  = cy > 0.25 && height > 0.2;
       const isFloor = cy >= -0.5 && cy < 0.5 && height >= 0.1; // slabs + tiles
       if (!isTall && !isFloor) return;
       // Clone material so opacity is per-mesh
