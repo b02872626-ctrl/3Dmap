@@ -746,8 +746,11 @@ function flyToRoutePoints(pathNodes) {
 const XRAY_LATERAL_NEAR = 1.6;  // <= this many units from view ray → fully transparent
 const XRAY_LATERAL_FAR  = 3.5;  // >= this many units → fully opaque
 const XRAY_MIN          = 0.05; // minimum opacity for "in the way" meshes
-const ZOOM_FADE_NEAR    = 22;   // camera→target distance for full fade
-const ZOOM_FADE_FAR     = 42;   // distance beyond which fade is off entirely
+// With the orthographic camera, "zoomed in" is measured by camera.zoom, not
+// by camera→target distance (which is now constant). Activate the fade only
+// in the "All floors" view, when there's something to actually see through.
+const XRAY_ZOOM_NEAR    = 1.1;  // at or below this zoom → no fade
+const XRAY_ZOOM_FAR     = 2.4;  // at or above this zoom → full fade
 
 const _xrayVec  = new THREE.Vector3();
 const _camDir   = new THREE.Vector3();
@@ -765,10 +768,13 @@ function updateXray() {
   if (focusDist < 0.01) return;
   _camDir.divideScalar(focusDist); // normalize
 
-  // ---- Zoom-aware fade strength: 1 when zoomed in, 0 when zoomed out ----
-  const fadeStrength = 1 - THREE.MathUtils.smoothstep(focusDist, ZOOM_FADE_NEAR, ZOOM_FADE_FAR);
+  // X-ray activation: only in the multi-floor "All" view, and only when
+  // the user is actually zoomed in enough that walls would obscure their
+  // view. Otherwise everything stays fully opaque.
+  const fadeStrength = (activeFloor === "all")
+    ? THREE.MathUtils.smoothstep(camera.zoom, XRAY_ZOOM_NEAR, XRAY_ZOOM_FAR)
+    : 0;
 
-  // Fast exit when zoomed out — make sure everything is opaque
   if (fadeStrength < 0.01) {
     for (const m of occluders) {
       if (m.material.opacity < 0.999) m.material.opacity = 1;
