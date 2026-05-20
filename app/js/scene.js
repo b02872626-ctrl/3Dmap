@@ -80,8 +80,11 @@ export function createScene(canvas) {
   sun.shadow.camera.bottom = -60;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 200;
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.08;
+  // Bias tuned to kill shadow acne (parallel stripes on lit floor tiles)
+  // while keeping shadows attached to their casters. normalBias is what
+  // does the heavy lifting for thin geometry like our tile + slab pairs.
+  sun.shadow.bias = -0.0002;
+  sun.shadow.normalBias = 0.35;
   sun.shadow.radius = 6;        // softer penumbra
   sun.target.position.set(cx, 0, cz);
   scene.add(sun);
