@@ -2,7 +2,7 @@
 //  Bootstrap + UI wiring for the CAM 3D Visitor Guide
 // =============================================================
 import * as THREE from "three";
-import { createScene } from "./scene.js";
+import { createScene, ISO_DIR, ISO_DISTANCE, FRUSTUM_SIZE } from "./scene.js";
 import { buildFloors, tryReplaceWithFBX } from "./floors.js";
 import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS } from "./data.js";
 
@@ -72,6 +72,8 @@ let cameraLerp = null;
 function updateCameraLerp() {
   if (!cameraLerp) return;
   controls.target.lerp(cameraLerp.target, 0.15);
+  // Camera must follow target to keep the iso lock
+  camera.position.copy(controls.target).add(_isoOffset);
   cameraLerp.t = Math.min(1, cameraLerp.t + 0.06);
   if (cameraLerp.t >= 1) cameraLerp = null;
 }
@@ -262,60 +264,46 @@ function hideDetails() { detailsEl.classList.remove("visible"); }
 // target in lockstep, so the focus lands precisely on the clicked room.
 let flyAnim = null;
 
+// Ortho-iso camera lock: the camera always sits at target + ISO_DIR*dist.
+// flyTo lerps the look-at TARGET and camera.zoom; the camera POSITION is
+// just derived from the target each frame so the angle never changes.
+const _isoOffset = ISO_DIR.clone().multiplyScalar(ISO_DISTANCE);
+
 function flyToRoom(group) {
   const room = group.userData.room;
   const fp = room.footprint;
-
-  // The room GROUP has no offset of its own — every child is positioned in
-  // floor-local plan-centered coords. So we compute the room's actual
-  // center from its footprint, then add the live floor-group Y so explode
-  // / floor-switch animations are respected.
   const localX = (fp.x + fp.w / 2) - PLAN_CENTER.x;
   const localZ = (fp.z + fp.d / 2) - PLAN_CENTER.z;
   const floorGroup = group.parent;
   const floorY = floorGroup ? floorGroup.position.y : 0;
   const target = new THREE.Vector3(localX, floorY + 1.6, localZ);
 
-  // Focus distance — comfortable framing with the selected room plus
-  // its neighbours visible for context (rather than a tight close-up).
+  // Zoom so the room fills a comfortable portion of the visible frustum —
+  // smaller rooms get more zoom, large halls less.
   const span = Math.max(fp.w, fp.d);
-  let dist = THREE.MathUtils.clamp(span * 2.0, 16, 30);
-  // Preserve the camera's current orbital orientation so the user doesn't
-  // get teleported to a different angle every click — only the focus point
-  // and distance change.
-  const dir = new THREE.Vector3()
-    .subVectors(camera.position, controls.target)
-    .normalize();
-  // Floor on the polar angle so we don't drop near horizon when the user
-  // had previously tilted very low.
-  if (dir.y < 0.45) {
-    dir.y = 0.45;
-    dir.normalize();
+  // Visible vertical extent = FRUSTUM_SIZE / zoom. We want span * ~3.2
+  // (the room itself plus ~1 room of context above + below).
+  let zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 3.2), 1.1, 3.2);
+
+  // Dolly in further if we're effectively already at this room
+  if (
+    controls.target.distanceTo(target) < 1.5 &&
+    Math.abs(camera.zoom - zoom) < 0.15
+  ) {
+    zoom = Math.min(controls.maxZoom, zoom * 1.35);
   }
-  // If we're being asked to fly to the same room twice (the destination is
-  // very close to where the camera already is), dolly in by ~25% so the
-  // user gets a visible response to their click.
-  const tentativeCameraPt = target.clone().add(dir.clone().multiplyScalar(dist));
-  if (tentativeCameraPt.distanceTo(camera.position) < 1.5) {
-    dist = Math.max(controls.minDistance + 0.5, dist * 0.72);
-  }
-  const cameraPt = target.clone().add(dir.multiplyScalar(dist));
-  flyTo(target, cameraPt, 55);
+  flyTo(target, zoom, 55);
 }
 
-// Camera position used to be jittery during fly because OrbitControls'
-// damping was still applying smoothing on top of our manual lerp. We
-// temporarily disable damping for the fly, then restore.
 let _origDamping = null;
-
-function flyTo(targetPoint, cameraPoint, dur = 55) {
+function flyTo(targetPoint, zoomLevel, dur = 55) {
   if (!flyAnim) _origDamping = controls.enableDamping;
   controls.enableDamping = false;
   flyAnim = {
-    posFrom: camera.position.clone(),
-    posTo: cameraPoint.clone(),
-    tgtFrom: controls.target.clone(),
-    tgtTo: targetPoint.clone(),
+    tgtFrom:  controls.target.clone(),
+    tgtTo:    targetPoint.clone(),
+    zoomFrom: camera.zoom,
+    zoomTo:   zoomLevel,
     t: 0, dur,
   };
   cameraLerp = null;
@@ -325,10 +313,12 @@ function updateFly() {
   if (!flyAnim) return;
   flyAnim.t++;
   const k = Math.min(1, flyAnim.t / flyAnim.dur);
-  // Cosine ease-in-out — smoother accel and decel than cubic
-  const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);
-  camera.position.lerpVectors(flyAnim.posFrom, flyAnim.posTo, ease);
+  const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);   // cosine ease in/out
   controls.target.lerpVectors(flyAnim.tgtFrom, flyAnim.tgtTo, ease);
+  // Camera position is FIXED relative to target — iso direction, iso distance
+  camera.position.copy(controls.target).add(_isoOffset);
+  camera.zoom = THREE.MathUtils.lerp(flyAnim.zoomFrom, flyAnim.zoomTo, ease);
+  camera.updateProjectionMatrix();
   if (k >= 1) {
     flyAnim = null;
     if (_origDamping !== null) {
@@ -361,7 +351,7 @@ document.getElementById("toggle-explode").addEventListener("click", (e) => {
 });
 
 document.getElementById("reset-cam").addEventListener("click", () => {
-  flyTo(new THREE.Vector3(0, 6, 0), new THREE.Vector3(50, 55, 50), 60);
+  flyTo(new THREE.Vector3(0, 4, 0), 1.0, 60);
 });
 
 // ---------------- Legend / category filter ----------------
@@ -469,24 +459,21 @@ function frameInitialView(animate = false) {
   const cz = (minZ + maxZ) / 2 - PLAN_CENTER.z;
   const span = Math.max(maxX - minX, maxZ - minZ);
 
-  // Distance proportional to span; clamped for sensible framing
-  const dist = THREE.MathUtils.clamp(span * 1.55, 36, 90);
   const floorGroup = activeFloor === "all"
     ? floorGroups.get(FLOORS[0].id)
     : floorGroups.get(activeFloor);
   const floorY = floorGroup ? floorGroup.position.y : 0;
 
   const targetVec = new THREE.Vector3(cx, floorY + 3, cz);
-  const camVec    = new THREE.Vector3(
-    cx + dist * 0.62,
-    floorY + dist * 0.78,
-    cz + dist * 0.62,
-  );
+  // We want the cluster (span wide) to fill ~80% of the visible frustum
+  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 1.4), 0.6, 2.0);
   if (animate) {
-    flyTo(targetVec, camVec, 55);
+    flyTo(targetVec, zoom, 55);
   } else {
-    camera.position.copy(camVec);
     controls.target.copy(targetVec);
+    camera.position.copy(targetVec).add(_isoOffset);
+    camera.zoom = zoom;
+    camera.updateProjectionMatrix();
     controls.update();
   }
 }
@@ -725,30 +712,26 @@ function focusOnStep(step) {
   // Drop a big arrow/marker on the route at the step's start position
   routeLayer.showStepArrow(step);
 
-  // Fly camera tight on that arrow, keeping the user's current orbital angle
+  // Fly to step location, tight zoom
   const floorGroup = floorGroups.get(step.floor);
   const floorY = floorGroup ? floorGroup.position.y : 0;
   const target = new THREE.Vector3(step.startX, floorY + 1.6, step.startZ);
-  const dir = new THREE.Vector3()
-    .subVectors(camera.position, controls.target)
-    .normalize();
-  if (dir.y < 0.45) { dir.y = 0.45; dir.normalize(); }
-  const dist = 11;
-  const cameraPt = target.clone().add(dir.multiplyScalar(dist));
-  flyTo(target, cameraPt, 50);
+  flyTo(target, 2.4, 50);
 }
 
 function flyToRoutePoints(pathNodes) {
-  // Average XZ across all nodes, target Y = centroid of visible floors
   const sx = pathNodes.reduce((a, n) => a + n.x, 0) / pathNodes.length;
   const sz = pathNodes.reduce((a, n) => a + n.z, 0) / pathNodes.length;
   const ys = [...new Set(pathNodes.map((n) => n.floor))].map(
-    (f) => floorGroups.get(f).userData.targetY ?? floorGroups.get(f).position.y
+    (f) => floorGroups.get(f).userData.targetY ?? floorGroups.get(f).position.y,
   );
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2 + 4;
-  const target = new THREE.Vector3(sx, cy, sz);
-  const camPt  = new THREE.Vector3(sx + 30, cy + 28, sz + 30);
-  flyTo(target, camPt, 65);
+  // Span of the route in XZ — used to pick a zoom that fits it on screen
+  const xs = pathNodes.map((n) => n.x);
+  const zs = pathNodes.map((n) => n.z);
+  const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / Math.max(span * 1.4, 12), 0.5, 2.2);
+  flyTo(new THREE.Vector3(sx, cy, sz), zoom, 65);
 }
 
 // ---------------- X-ray fade for occluders ----------------

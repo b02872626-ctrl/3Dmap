@@ -1,10 +1,20 @@
 // =============================================================
-//  Three.js scene: isometric orbital camera, lighting, helpers
+//  Three.js scene: ORTHOGRAPHIC camera locked to an isometric
+//  direction. Pan + zoom only — no rotation.
 // =============================================================
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { FBXLoader }     from "three/addons/loaders/FBXLoader.js";
-import { PLAN_BOUNDS }   from "./data.js";
+
+// Direction from target to camera, normalized. ~35° tilt above horizon
+// with a 45° yaw — classic isometric.
+export const ISO_DIR = new THREE.Vector3(1, 0.82, 1).normalize();
+// How far the camera sits behind that direction. In an orthographic
+// projection this distance doesn't affect "zoom" — it only matters for
+// shadow / depth precision — so we pick a comfortable mid-range value.
+export const ISO_DISTANCE = 100;
+// Vertical extent of the visible world frustum at zoom = 1.
+export const FRUSTUM_SIZE = 60;
 
 export function createScene(canvas) {
   // ---------------- Renderer ----------------
@@ -24,117 +34,122 @@ export function createScene(canvas) {
 
   // ---------------- Scene ----------------
   const scene = new THREE.Scene();
-  scene.background = null; // CSS gradient shows through
-  scene.fog = new THREE.Fog(0x0c1116, 80, 220);
+  scene.background = null;
+  scene.fog = new THREE.Fog(0x0c1116, 80, 320);
 
-  // ---------------- Camera (perspective with isometric framing) ----------------
+  // ---------------- Orthographic camera ----------------
   const aspect = window.innerWidth / window.innerHeight;
-  // Wider near plane than the default 0.1 — the camera never gets closer
-  // than ~7 units anyway (OrbitControls.minDistance), so raising near to
-  // 0.5 gives the depth buffer a lot more precision and eliminates the
-  // z-fighting "shimmer" you can see on big flat surfaces like the slab.
-  const camera = new THREE.PerspectiveCamera(38, aspect, 0.5, 500);
-  // The model is rendered plan-centered, so world origin is the slab center.
-  // main.js overrides this with a precise frameInitialView() once the floors
-  // are built, but we set a reasonable default so the canvas isn't empty
-  // before that runs.
-  const cx = 0;
-  const cz = 0;
-  camera.position.set(cx + 50, 55, cz + 50);
-  camera.lookAt(cx, 6, cz);
+  const camera = new THREE.OrthographicCamera(
+    -FRUSTUM_SIZE * aspect / 2,
+     FRUSTUM_SIZE * aspect / 2,
+     FRUSTUM_SIZE / 2,
+    -FRUSTUM_SIZE / 2,
+    0.1, 600,
+  );
+  const initialTarget = new THREE.Vector3(0, 4, 0);
+  camera.position.copy(initialTarget).add(
+    ISO_DIR.clone().multiplyScalar(ISO_DISTANCE),
+  );
+  camera.lookAt(initialTarget);
+  camera.zoom = 1;
+  camera.updateProjectionMatrix();
 
-  // ---------------- Orbit controls (Situm-style: free orbit, clamped) ----------------
+  // ---------------- Orbit controls: pan + zoom, NO rotation ----------------
   const controls = new OrbitControls(camera, canvas);
-  controls.target.set(cx, 6, cz);
+  controls.target.copy(initialTarget);
+  controls.enableRotate = false;             // <- LOCKED to iso
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.minDistance = 7;     // allow real close-up focus on small rooms
-  controls.maxDistance = 140;
-  // Keep the camera in the isometric range: never less than ~22° above
-  // the horizon, never less than ~16° from straight overhead.
-  controls.maxPolarAngle = Math.PI * 0.38;  // ~68° from vertical = 22° above horizon
-  controls.minPolarAngle = Math.PI * 0.10;  // ~18° from vertical
-  controls.screenSpacePanning = false;
-  controls.panSpeed = 0.7;
-  controls.rotateSpeed = 0.6;
+  controls.enablePan  = true;
+  controls.enableZoom = true;
+  controls.zoomSpeed  = 1.1;
+  controls.panSpeed   = 0.8;
+  controls.minZoom    = 0.45;                // can't zoom out further than ~half size
+  controls.maxZoom    = 4.5;                 // can't zoom in further than ~4.5×
+  controls.screenSpacePanning = true;        // map-style panning
+  // Map-style mouse: left/right click drag = pan, wheel = zoom
+  controls.mouseButtons = {
+    LEFT:   THREE.MOUSE.PAN,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT:  THREE.MOUSE.PAN,
+  };
+  // Touch: single finger pans, two-finger pinch zooms
+  controls.touches = {
+    ONE: THREE.TOUCH.PAN,
+    TWO: THREE.TOUCH.DOLLY_PAN,
+  };
 
   // ---------------- Lighting ----------------
-  // Mostly ambient: omni-directional fill so interiors are evenly lit,
-  // with just a whisper of directionality to keep walls from going flat.
   const ambient = new THREE.AmbientLight(0xf5efe2, 0.55);
   scene.add(ambient);
 
-  // Hemisphere — warm sky, cool floor bounce
   const hemi = new THREE.HemisphereLight(0xfff3dc, 0x2a2f38, 0.95);
-  hemi.position.set(cx, 30, cz);
+  hemi.position.set(0, 30, 0);
   scene.add(hemi);
 
-  // Very soft directional light for gentle shadows only
   const sun = new THREE.DirectionalLight(0xffe9c8, 0.35);
-  sun.position.set(cx + 40, 80, cz - 30);
+  sun.position.set(40, 80, -30);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left   = -60;
-  sun.shadow.camera.right  =  60;
-  sun.shadow.camera.top    =  60;
-  sun.shadow.camera.bottom = -60;
+  sun.shadow.camera.left   = -80;
+  sun.shadow.camera.right  =  80;
+  sun.shadow.camera.top    =  80;
+  sun.shadow.camera.bottom = -80;
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 200;
-  // Bias tuned to kill shadow acne (parallel stripes on lit floor tiles)
-  // while keeping shadows attached to their casters. normalBias is what
-  // does the heavy lifting for thin geometry like our tile + slab pairs.
-  sun.shadow.bias = -0.0002;
+  sun.shadow.camera.far = 240;
+  sun.shadow.bias       = -0.0002;
   sun.shadow.normalBias = 0.35;
-  sun.shadow.radius = 6;        // softer penumbra
-  sun.target.position.set(cx, 0, cz);
+  sun.shadow.radius     = 6;
+  sun.target.position.set(0, 0, 0);
   scene.add(sun);
   scene.add(sun.target);
 
-  // ---------------- Ground ----------------
-  const groundGeo = new THREE.CircleGeometry(160, 64);
-  const groundMat = new THREE.MeshStandardMaterial({
-    color: 0x0e1217,
-    roughness: 1,
-    metalness: 0,
-  });
-  const ground = new THREE.Mesh(groundGeo, groundMat);
+  // ---------------- Ground + halo + grid ----------------
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(220, 64),
+    new THREE.MeshStandardMaterial({ color: 0x0e1217, roughness: 1, metalness: 0 }),
+  );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(cx, -0.05, cz);
+  ground.position.set(0, -0.05, 0);
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // Soft contact-shadow halo under building
   const haloCanvas = document.createElement("canvas");
   haloCanvas.width = haloCanvas.height = 256;
   const hctx = haloCanvas.getContext("2d");
   const grad = hctx.createRadialGradient(128, 128, 30, 128, 128, 128);
-  grad.addColorStop(0, "rgba(0,0,0,0.55)");
+  grad.addColorStop(0,   "rgba(0,0,0,0.55)");
   grad.addColorStop(0.6, "rgba(0,0,0,0.15)");
-  grad.addColorStop(1, "rgba(0,0,0,0)");
+  grad.addColorStop(1,   "rgba(0,0,0,0)");
   hctx.fillStyle = grad;
   hctx.fillRect(0, 0, 256, 256);
   const haloTex = new THREE.CanvasTexture(haloCanvas);
   haloTex.colorSpace = THREE.SRGBColorSpace;
   const halo = new THREE.Mesh(
-    new THREE.PlaneGeometry(120, 120),
-    new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false })
+    new THREE.PlaneGeometry(160, 160),
+    new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false }),
   );
   halo.rotation.x = -Math.PI / 2;
-  halo.position.set(cx, 0.005, cz);
+  halo.position.set(0, 0.005, 0);
   scene.add(halo);
 
-  // Subtle grid (very faint)
-  const grid = new THREE.GridHelper(220, 110, 0x1c2330, 0x141a22);
-  grid.position.set(cx, 0, cz);
+  const grid = new THREE.GridHelper(260, 130, 0x1c2330, 0x141a22);
+  grid.position.set(0, 0, 0);
   grid.material.transparent = true;
   grid.material.opacity = 0.18;
   scene.add(grid);
 
   // ---------------- Resize ----------------
   window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const a = w / h;
+    camera.left   = -FRUSTUM_SIZE * a / 2;
+    camera.right  =  FRUSTUM_SIZE * a / 2;
+    camera.top    =  FRUSTUM_SIZE / 2;
+    camera.bottom = -FRUSTUM_SIZE / 2;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(w, h);
   });
 
   // ---------------- Render loop ----------------
