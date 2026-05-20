@@ -276,10 +276,10 @@ function flyToRoom(group) {
   const floorY = floorGroup ? floorGroup.position.y : 0;
   const target = new THREE.Vector3(localX, floorY + 1.6, localZ);
 
-  // Tight focus distance — camera moves CLOSE to the selected room so it
-  // fills the frame.
+  // Focus distance — comfortable framing with the selected room plus
+  // its neighbours visible for context (rather than a tight close-up).
   const span = Math.max(fp.w, fp.d);
-  let dist = THREE.MathUtils.clamp(span * 1.35, 8.5, 20);
+  let dist = THREE.MathUtils.clamp(span * 2.0, 16, 30);
   // Preserve the camera's current orbital orientation so the user doesn't
   // get teleported to a different angle every click — only the focus point
   // and distance change.

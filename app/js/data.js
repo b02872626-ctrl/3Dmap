@@ -131,7 +131,10 @@ const floor2 = [
   r("232", "Gallery 232", "exhibition",  4, 14, 8, 6, 2),
   r("208", "Gallery 208", "european",   28, 14, 4, 4, 2),
   r("209", "Gallery 209", "european",   28, 18, 4, 4, 2),
-  r("207", "Gallery 207 (Mezzanine)", "european", 16, 18, 8, 4, 2),
+  // Gallery 207 was previously 8 wide and overlapped Gallery 206 at (20,18) —
+  // two rooms sharing the same footprint caused z-fighting on transparent
+  // walls/floor tiles. Shrunk to 4 wide so 207 sits left of 206.
+  r("207", "Gallery 207 (Mezzanine)", "european", 16, 18, 4, 4, 2),
 
   // Library wing (south-east)
   r("201", "Gallery 201", "european",   16, 22, 4, 4, 2),
