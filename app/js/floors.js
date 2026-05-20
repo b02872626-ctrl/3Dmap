@@ -187,6 +187,25 @@ function buildRoom(room, adj = { N: false, S: false, E: false, W: false }) {
   const cx = offsetX(x + w / 2);
   const cz = offsetZ(z + d / 2);
 
+  // Elevators are not full rooms — they're embedded inside other rooms
+  // (e.g. Elevator B is inside the courtyard). Don't generate a floor tile
+  // or walls for them — those would overlap the host room's geometry and
+  // produce doubled walls / z-fighting tiles. We render only the elevator
+  // structure itself, and keep userData so picking + routing still works.
+  if (room.icon) {
+    addElevator(group, room, cx, cz, FLOOR_THICK);
+    group.userData = {
+      kind: "room",
+      roomId: room.id,
+      room,
+      baseColor: baseColor.clone(),
+      originalEmissive: new THREE.Color(0, 0, 0),
+      tile: null,
+      highlightTargets: [],
+    };
+    return group;
+  }
+
   // -------- Floor tile --------
   const tileInset = 0.04;
   const tileW = Math.max(w - tileInset * 2, 0.3);
@@ -223,16 +242,25 @@ function buildRoom(room, adj = { N: false, S: false, E: false, W: false }) {
   const wallH = room.tall ? WALL_HEIGHT + TALL_BOOST : WALL_HEIGHT;
 
   if (wantWalls) {
-    // helper: add a wall segment
+    // helper: add a wall segment + trim cap.
+    //   The cap overhangs ONLY on the thickness axis (perpendicular to the
+    //   wall's length) — for the cornice look — and is exactly the wall's
+    //   length on the length axis. Otherwise two rooms whose walls meet
+    //   along a shared boundary would have caps that overlap each other,
+    //   producing a visibly doubled / thicker wall band.
     const addWall = (geo, posX, posY, posZ) => {
       const m = new THREE.Mesh(geo, wallMat);
       m.position.set(posX, posY, posZ);
       m.castShadow = true;
       m.receiveShadow = true;
       group.add(m);
-      // Top cap (slightly wider, darker trim)
+      // Determine wall orientation: N/S walls run along X (width > depth),
+      // E/W walls run along Z (depth > width). Overhang the THICKNESS axis.
+      const isNS = geo.parameters.width >= geo.parameters.depth;
+      const capW = isNS ? geo.parameters.width        : geo.parameters.width  * 1.06;
+      const capD = isNS ? geo.parameters.depth * 1.06 : geo.parameters.depth;
       const cap = new THREE.Mesh(
-        new THREE.BoxGeometry(geo.parameters.width * 1.04, 0.06, geo.parameters.depth * 1.04),
+        new THREE.BoxGeometry(capW, 0.06, capD),
         wallCapMat
       );
       cap.position.set(posX, posY + wallH / 2 + 0.03, posZ);
