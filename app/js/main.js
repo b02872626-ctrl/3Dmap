@@ -279,11 +279,12 @@ function flyToRoom(group) {
   const target = new THREE.Vector3(localX, floorY + 1.6, localZ);
 
   // Zoom so the room fills a comfortable portion of the visible frustum —
-  // smaller rooms get more zoom, large halls less. Min is set above the
-  // x-ray threshold so any room click always crosses into "focus mode"
-  // and the upper floors snap out.
+  // smaller rooms get more zoom, large halls less. Min is generous so
+  // clicking a big hall keeps the other floors visible (zoom stays under
+  // the x-ray threshold). Small / medium rooms zoom past the threshold
+  // and the upper floors snap out for clarity.
   const span = Math.max(fp.w, fp.d);
-  let zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 3.2), 1.75, 3.2);
+  let zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 3.2), 1.4, 3.2);
 
   // Dolly in further if we're effectively already at this room
   if (
@@ -743,12 +744,12 @@ function flyToRoutePoints(pathNodes) {
 // The lateral band is narrow on purpose: walls directly in front of you
 // vanish, but the rooms beside them — even right next to the line of
 // sight — stay solid.
-// X-ray activation threshold (camera.zoom). The default all-floors
-// overview sits at ~1.43; anything below this threshold reads as
-// "browsing the whole museum" and keeps all floors visible. Click
-// a room and the fly-to puts zoom past 1.7, which hides upper floors
-// so the focus floor reads as a clean cutaway.
-const XRAY_ZOOM_THRESHOLD = 1.55;
+// X-ray activation threshold (camera.zoom). The default "All" overview
+// sits at ~0.97 — well below the threshold, so all three floors stack
+// visibly. Threshold is set high enough that casual zoom-ins and Great
+// Hall clicks still keep all floors visible; only when the user really
+// drills into a single small room do the upper floors snap out.
+const XRAY_ZOOM_THRESHOLD = 2.1;
 
 function updateXray() {
   // Only meaningful in the multi-floor "All" view. In single-floor mode,
