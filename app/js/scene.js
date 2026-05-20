@@ -29,7 +29,11 @@ export function createScene(canvas) {
 
   // ---------------- Camera (perspective with isometric framing) ----------------
   const aspect = window.innerWidth / window.innerHeight;
-  const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 500);
+  // Wider near plane than the default 0.1 — the camera never gets closer
+  // than ~7 units anyway (OrbitControls.minDistance), so raising near to
+  // 0.5 gives the depth buffer a lot more precision and eliminates the
+  // z-fighting "shimmer" you can see on big flat surfaces like the slab.
+  const camera = new THREE.PerspectiveCamera(38, aspect, 0.5, 500);
   // The model is rendered plan-centered, so world origin is the slab center.
   // main.js overrides this with a precise frameInitialView() once the floors
   // are built, but we set a reasonable default so the canvas isn't empty

@@ -197,7 +197,10 @@ function buildRoom(room, adj = { N: false, S: false, E: false, W: false }) {
     new THREE.BoxGeometry(tileW, FLOOR_THICK, tileD),
     tileMat
   );
-  tile.position.set(cx, FLOOR_THICK / 2, cz);
+  // Lift the tile a small epsilon above the slab top to prevent z-fighting:
+  // slab top sits at world Y=0; without this offset the tile's bottom face
+  // is coincident with the slab face and they shimmer through each other.
+  tile.position.set(cx, FLOOR_THICK / 2 + 0.04, cz);
   tile.receiveShadow = true;
   group.add(tile);
 
