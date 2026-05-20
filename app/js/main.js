@@ -752,38 +752,30 @@ const XRAY_ZOOM_NEAR    = 0.92; // at or below this zoom → no fade
 const XRAY_ZOOM_FAR     = 1.15; // at or above this zoom → full fade
 
 function updateXray() {
-  // X-ray activation: only in the multi-floor "All" view, and only when
-  // the user is zoomed in enough to be examining one specific floor.
-  const fadeStrength = (activeFloor === "all")
-    ? THREE.MathUtils.smoothstep(camera.zoom, XRAY_ZOOM_NEAR, XRAY_ZOOM_FAR)
-    : 0;
+  // Only meaningful in the multi-floor "All" view. In single-floor mode,
+  // applyFloorLayout already sets per-floor visibility — don't touch it.
+  if (activeFloor !== "all") return;
 
-  if (fadeStrength < 0.01) {
-    for (const m of occluders) {
-      if (m.material.opacity < 0.999) m.material.opacity = 1;
-    }
+  // Reset all opacities to 1 (cleanup from any earlier per-mesh logic).
+  for (const m of occluders) {
+    if (m.material.opacity < 0.999) m.material.opacity = 1;
+  }
+
+  // Below the activation zoom, every floor stays visible (overview).
+  const zoomed = camera.zoom >= XRAY_ZOOM_NEAR;
+  if (!zoomed) {
+    for (const fg of floorGroups.values()) fg.visible = true;
     return;
   }
 
-  // The user's focus point is where OrbitControls is aimed. Whichever floor
-  // sits AT (or below) that Y is what they want to see. Floors above the
-  // focus get faded out — at full strength they're effectively invisible
-  // so the focus floor reads as a clean cutaway.
+  // Zoomed in: hide ENTIRE upper floors so nothing leaks through —
+  // wall caps, line edges, route segments, props, labels, all of it.
+  // The focused floor (where the camera is aimed) and any floors below
+  // it stay visible.
   const focusY = controls.target.y;
-  const invisibleOpacity = 0.02;
-  const hiddenTarget = THREE.MathUtils.lerp(1, invisibleOpacity, fadeStrength);
-
-  for (const m of occluders) {
-    if (!m.visible) continue;
-    if (!m.parent || !m.parent.visible) continue;
-
-    const floorY = m.userData.floorGroup?.position.y;
-    const aboveFocus = floorY !== undefined && floorY > focusY + 1.0;
-
-    const targetOpacity = aboveFocus ? hiddenTarget : 1;
-    if (Math.abs(m.material.opacity - targetOpacity) > 0.005) {
-      m.material.opacity = targetOpacity;
-    }
+  for (const fg of floorGroups.values()) {
+    const floorY = fg.position.y;
+    fg.visible = floorY <= focusY + 1.0;
   }
 }
 
