@@ -279,11 +279,11 @@ function flyToRoom(group) {
   const target = new THREE.Vector3(localX, floorY + 1.6, localZ);
 
   // Zoom so the room fills a comfortable portion of the visible frustum —
-  // smaller rooms get more zoom, large halls less.
+  // smaller rooms get more zoom, large halls less. Min is set above the
+  // x-ray threshold so any room click always crosses into "focus mode"
+  // and the upper floors snap out.
   const span = Math.max(fp.w, fp.d);
-  // Visible vertical extent = FRUSTUM_SIZE / zoom. We want span * ~3.2
-  // (the room itself plus ~1 room of context above + below).
-  let zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 3.2), 1.1, 3.2);
+  let zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 3.2), 1.75, 3.2);
 
   // Dolly in further if we're effectively already at this room
   if (
@@ -743,13 +743,12 @@ function flyToRoutePoints(pathNodes) {
 // The lateral band is narrow on purpose: walls directly in front of you
 // vanish, but the rooms beside them — even right next to the line of
 // sight — stay solid.
-// With the orthographic camera, "zoomed in" is measured by camera.zoom.
-// Activation is a sharp ramp around zoom 1.0 — below that the user is
-// looking at the whole museum (overview) so all floors stay visible;
-// past it they're examining one specific floor and the floors above
-// should drop out completely.
-const XRAY_ZOOM_NEAR    = 0.92; // at or below this zoom → no fade
-const XRAY_ZOOM_FAR     = 1.15; // at or above this zoom → full fade
+// X-ray activation threshold (camera.zoom). The default all-floors
+// overview sits at ~1.43; anything below this threshold reads as
+// "browsing the whole museum" and keeps all floors visible. Click
+// a room and the fly-to puts zoom past 1.7, which hides upper floors
+// so the focus floor reads as a clean cutaway.
+const XRAY_ZOOM_THRESHOLD = 1.55;
 
 function updateXray() {
   // Only meaningful in the multi-floor "All" view. In single-floor mode,
@@ -762,7 +761,7 @@ function updateXray() {
   }
 
   // Below the activation zoom, every floor stays visible (overview).
-  const zoomed = camera.zoom >= XRAY_ZOOM_NEAR;
+  const zoomed = camera.zoom >= XRAY_ZOOM_THRESHOLD;
   if (!zoomed) {
     for (const fg of floorGroups.values()) fg.visible = true;
     return;
