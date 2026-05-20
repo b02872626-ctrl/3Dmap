@@ -93,14 +93,28 @@ export function buildFloors() {
     group.userData = { floorId: floor.id, baseY: floor.y };
     group.position.y = floor.y;
 
-    // Slab beneath the floor tiles
-    const slabW = (PLAN_BOUNDS.maxX - PLAN_BOUNDS.minX) + SLAB_PAD * 2;
-    const slabD = (PLAN_BOUNDS.maxZ - PLAN_BOUNDS.minZ) + SLAB_PAD * 2;
+    // Slab beneath the floor tiles — sized + positioned to the ACTUAL room
+    // cluster on this floor (not the full PLAN_BOUNDS), so each floor's
+    // slab tightly hugs its galleries. This puts the slab centroid at the
+    // room centroid, which lets the camera framing land truly centered.
+    const roomsHere = ROOMS.filter((r) => r.floor === floor.id);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const r of roomsHere) {
+      minX = Math.min(minX, r.footprint.x);
+      maxX = Math.max(maxX, r.footprint.x + r.footprint.w);
+      minZ = Math.min(minZ, r.footprint.z);
+      maxZ = Math.max(maxZ, r.footprint.z + r.footprint.d);
+    }
+    const slabW  = (maxX - minX) + SLAB_PAD * 2;
+    const slabD  = (maxZ - minZ) + SLAB_PAD * 2;
+    const slabCx = ((minX + maxX) / 2) - planCenter.x;
+    const slabCz = ((minZ + maxZ) / 2) - planCenter.z;
+
     const slab = new THREE.Mesh(
       new THREE.BoxGeometry(slabW, SLAB_THICK, slabD),
       new THREE.MeshStandardMaterial({ color: SLAB_COLOR, roughness: 0.92, metalness: 0.02 })
     );
-    slab.position.set(0, -SLAB_THICK / 2, 0);
+    slab.position.set(slabCx, -SLAB_THICK / 2, slabCz);
     slab.receiveShadow = true;
     group.add(slab);
 
@@ -112,8 +126,7 @@ export function buildFloors() {
     edges.position.copy(slab.position);
     group.add(edges);
 
-    // Rooms
-    const roomsHere = ROOMS.filter((r) => r.floor === floor.id);
+    // Rooms (roomsHere was already computed above for slab sizing)
     for (const room of roomsHere) {
       const rg = buildRoom(room, adjacency.get(room.id));
       group.add(rg);
