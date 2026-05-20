@@ -772,9 +772,10 @@ function updateXray() {
   );
 
   if (zoomFade < 0.005) {
-    // Overview: reset all opacities to full.
+    // Overview: restore each object to its natural opacity.
     for (const m of occluders) {
-      if (m.material.opacity < 0.999) m.material.opacity = 1;
+      const base = m.userData.baseOpacity ?? 1;
+      if (Math.abs(m.material.opacity - base) > 0.005) m.material.opacity = base;
     }
     return;
   }
@@ -788,10 +789,11 @@ function updateXray() {
   const focusY = controls.target.y;
 
   for (const m of occluders) {
+    const base = m.userData.baseOpacity ?? 1;
     const floorY = m.userData.floorGroup?.position.y;
-    // Floors at or below the focus stay completely solid.
+    // Floors at or below the focus stay at their natural opacity.
     if (floorY === undefined || floorY <= focusY + 1.0) {
-      if (m.material.opacity < 0.999) m.material.opacity = 1;
+      if (Math.abs(m.material.opacity - base) > 0.005) m.material.opacity = base;
       continue;
     }
 
@@ -810,7 +812,7 @@ function updateXray() {
     );
 
     const fade = zoomFade * radialMask;
-    const target = THREE.MathUtils.lerp(1, XRAY_MIN_OPACITY, fade);
+    const target = THREE.MathUtils.lerp(base, XRAY_MIN_OPACITY, fade);
     if (Math.abs(m.material.opacity - target) > 0.005) {
       m.material.opacity = target;
     }

@@ -148,27 +148,35 @@ export function buildFloors() {
   const occluders = [];
   for (const fg of floorGroups.values()) {
     fg.traverse((m) => {
-      if (!m.isMesh) return;
-      if (!m.geometry) return;
-      if (m.userData.xrayOccluder) return; // already done
-      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-      const bb = m.geometry.boundingBox;
-      const height = bb.max.y - bb.min.y;
-      const cy = m.position.y;
-      // Lower thresholds so SMALL props (pedestals at cy ≈ 0.57, kiosk
-       // screens at h ≈ 0.35, bench legs, etc.) also fade — otherwise
-       // they stay solid while their parent walls turn transparent and
-       // become an awkward floating block.
-      const isTall  = cy > 0.25 && height > 0.2;
-      const isFloor = cy >= -0.5 && cy < 0.5 && height >= 0.1; // slabs + tiles
-      if (!isTall && !isFloor) return;
-      // Clone material so opacity is per-mesh
+      if (!m.material) return;                 // skip Groups / non-renderable
+      if (m.userData.xrayOccluder) return;     // already tagged
+
+      // Decide whether this object should participate in the x-ray fade.
+      let include = false;
+      if (m.isMesh && m.geometry) {
+        if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+        const bb = m.geometry.boundingBox;
+        const height = bb.max.y - bb.min.y;
+        const cy = m.position.y;
+        // height threshold dropped to 0.05 so wall CAPS (h ≈ 0.06) and
+        // any thin trim also fade with their walls.
+        const isTall  = cy > 0.25 && height > 0.05;
+        const isFloor = cy >= -0.5 && cy < 0.5 && height >= 0.05;
+        include = isTall || isFloor;
+      } else if (m.isLineSegments || m.isLine) {
+        // Slab edge outlines etc. — always include so the silhouette
+        // fades with the floor.
+        include = true;
+      }
+      if (!include) return;
+
+      // Clone material so opacity is per-object.
       m.material = m.material.clone();
       m.material.transparent = true;
       m.material.depthWrite = true;
       m.userData.xrayOccluder = true;
       m.userData.baseOpacity = m.material.opacity ?? 1;
-      m.userData.floorGroup = fg;   // for "between floors" detection
+      m.userData.floorGroup = fg;
       occluders.push(m);
     });
   }
