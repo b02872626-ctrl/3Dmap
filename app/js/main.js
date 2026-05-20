@@ -744,10 +744,12 @@ function flyToRoutePoints(pathNodes) {
 // vanish, but the rooms beside them — even right next to the line of
 // sight — stay solid.
 // With the orthographic camera, "zoomed in" is measured by camera.zoom.
-// The x-ray fades upper floors only in the "All" view, only once the user
-// has zoomed in enough to be examining a specific level.
-const XRAY_ZOOM_NEAR    = 1.1;  // at or below this zoom → no fade
-const XRAY_ZOOM_FAR     = 2.4;  // at or above this zoom → full fade
+// Activation is a sharp ramp around zoom 1.0 — below that the user is
+// looking at the whole museum (overview) so all floors stay visible;
+// past it they're examining one specific floor and the floors above
+// should drop out completely.
+const XRAY_ZOOM_NEAR    = 0.92; // at or below this zoom → no fade
+const XRAY_ZOOM_FAR     = 1.15; // at or above this zoom → full fade
 
 function updateXray() {
   // X-ray activation: only in the multi-floor "All" view, and only when
