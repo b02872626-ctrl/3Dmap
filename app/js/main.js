@@ -743,34 +743,15 @@ function flyToRoutePoints(pathNodes) {
 // The lateral band is narrow on purpose: walls directly in front of you
 // vanish, but the rooms beside them — even right next to the line of
 // sight — stay solid.
-const XRAY_LATERAL_NEAR = 1.6;  // <= this many units from view ray → fully transparent
-const XRAY_LATERAL_FAR  = 3.5;  // >= this many units → fully opaque
-const XRAY_MIN          = 0.05; // minimum opacity for "in the way" meshes
-// With the orthographic camera, "zoomed in" is measured by camera.zoom, not
-// by camera→target distance (which is now constant). Activate the fade only
-// in the "All floors" view, when there's something to actually see through.
+// With the orthographic camera, "zoomed in" is measured by camera.zoom.
+// The x-ray fades upper floors only in the "All" view, only once the user
+// has zoomed in enough to be examining a specific level.
 const XRAY_ZOOM_NEAR    = 1.1;  // at or below this zoom → no fade
 const XRAY_ZOOM_FAR     = 2.4;  // at or above this zoom → full fade
 
-const _xrayVec  = new THREE.Vector3();
-const _camDir   = new THREE.Vector3();
-const _toOcc    = new THREE.Vector3();
-const _projPt   = new THREE.Vector3();
-const _xrayRay  = new THREE.Ray();
-const _xrayHit  = new THREE.Vector3();
-const _xrayBox  = new THREE.Box3();
-const _worldPos = new THREE.Vector3();
-
 function updateXray() {
-  const camPos = camera.position;
-  _camDir.copy(controls.target).sub(camPos);
-  const focusDist = _camDir.length();
-  if (focusDist < 0.01) return;
-  _camDir.divideScalar(focusDist); // normalize
-
   // X-ray activation: only in the multi-floor "All" view, and only when
-  // the user is actually zoomed in enough that walls would obscure their
-  // view. Otherwise everything stays fully opaque.
+  // the user is zoomed in enough to be examining one specific floor.
   const fadeStrength = (activeFloor === "all")
     ? THREE.MathUtils.smoothstep(camera.zoom, XRAY_ZOOM_NEAR, XRAY_ZOOM_FAR)
     : 0;
@@ -782,59 +763,25 @@ function updateXray() {
     return;
   }
 
-  _xrayRay.origin.copy(camPos);
-  _xrayRay.direction.copy(_camDir);
+  // The user's focus point is where OrbitControls is aimed. Whichever floor
+  // sits AT (or below) that Y is what they want to see. Floors above the
+  // focus get faded out — at full strength they're effectively invisible
+  // so the focus floor reads as a clean cutaway.
+  const focusY = controls.target.y;
+  const invisibleOpacity = 0.02;
+  const hiddenTarget = THREE.MathUtils.lerp(1, invisibleOpacity, fadeStrength);
 
   for (const m of occluders) {
     if (!m.visible) continue;
     if (!m.parent || !m.parent.visible) continue;
 
-    // Rebuild the mesh's world bbox each frame. Meshes have translation only
-    // (no rotation/scale), so world bbox = world-position + local bbox.
-    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-    const lbb = m.geometry.boundingBox;
-    m.getWorldPosition(_worldPos);
-    _xrayBox.min.set(
-      _worldPos.x + lbb.min.x,
-      _worldPos.y + lbb.min.y,
-      _worldPos.z + lbb.min.z,
-    );
-    _xrayBox.max.set(
-      _worldPos.x + lbb.max.x,
-      _worldPos.y + lbb.max.y,
-      _worldPos.z + lbb.max.z,
-    );
+    const floorY = m.userData.floorGroup?.position.y;
+    const aboveFocus = floorY !== undefined && floorY > focusY + 1.0;
 
-    let losOpacity;
-
-    // (1) Ray-AABB intersection: does the view ray actually pierce this
-    //     mesh between camera and target? Catches slabs/floor tiles that
-    //     the center-based test missed (large meshes whose center sits
-    //     well off-axis from the ray).
-    const hit = _xrayRay.intersectBox(_xrayBox, _xrayHit);
-    if (hit && _xrayHit.distanceTo(camPos) < focusDist - 0.5) {
-      losOpacity = XRAY_MIN;
-    } else {
-      // (2) Center-based lateral falloff — smooth halo around the ray for
-      //     walls that JUST graze the line of sight without piercing it.
-      _toOcc.copy(_worldPos).sub(camPos);
-      const along = _toOcc.dot(_camDir);
-      if (along <= 0.5 || along >= focusDist + 0.5) {
-        losOpacity = 1;
-      } else {
-        _projPt.copy(_camDir).multiplyScalar(along);
-        const lateral = _toOcc.distanceTo(_projPt);
-        let t;
-        if (lateral <= XRAY_LATERAL_NEAR) t = 0;
-        else if (lateral >= XRAY_LATERAL_FAR) t = 1;
-        else t = (lateral - XRAY_LATERAL_NEAR) / (XRAY_LATERAL_FAR - XRAY_LATERAL_NEAR);
-        t = t * t * (3 - 2 * t);
-        losOpacity = XRAY_MIN + (1 - XRAY_MIN) * t;
-      }
+    const targetOpacity = aboveFocus ? hiddenTarget : 1;
+    if (Math.abs(m.material.opacity - targetOpacity) > 0.005) {
+      m.material.opacity = targetOpacity;
     }
-
-    const target = 1 - (1 - losOpacity) * fadeStrength;
-    if (Math.abs(m.material.opacity - target) > 0.005) m.material.opacity = target;
   }
 }
 
