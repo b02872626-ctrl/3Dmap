@@ -744,38 +744,76 @@ function flyToRoutePoints(pathNodes) {
 // The lateral band is narrow on purpose: walls directly in front of you
 // vanish, but the rooms beside them — even right next to the line of
 // sight — stay solid.
-// X-ray activation threshold (camera.zoom). The default "All" overview
-// sits at ~0.97 — well below the threshold, so all three floors stack
-// visibly. Threshold is set high enough that casual zoom-ins and Great
-// Hall clicks still keep all floors visible; only when the user really
-// drills into a single small room do the upper floors snap out.
-const XRAY_ZOOM_THRESHOLD = 2.1;
+// X-ray fade range. Upper floors smoothly fade as the user zooms in —
+// no hard cutoff. The fade is per-mesh with a radial mask that starts
+// in the centre of the screen and expands outward like an oval, so the
+// area directly under what you're looking at clears first and the
+// edges of the floor stay visible longest.
+const XRAY_ZOOM_START = 1.35;    // start ramping at this zoom
+const XRAY_ZOOM_FULL  = 2.40;    // fully faded by this zoom
+const XRAY_RADIAL_IN  = 0.20;    // normalized screen distance — fully faded inside this
+const XRAY_RADIAL_OUT = 1.10;    // beyond this — no fade (stays solid)
+const XRAY_MIN_OPACITY = 0.02;   // floor at the very end of the fade
+
+// Reused scratch objects so updateXray doesn't allocate on every frame
+const _xrayTmp    = new THREE.Vector3();
+const _xrayRight  = new THREE.Vector3();
+const _xrayUp     = new THREE.Vector3();
 
 function updateXray() {
-  // Only meaningful in the multi-floor "All" view. In single-floor mode,
-  // applyFloorLayout already sets per-floor visibility — don't touch it.
   if (activeFloor !== "all") return;
 
-  // Reset all opacities to 1 (cleanup from any earlier per-mesh logic).
-  for (const m of occluders) {
-    if (m.material.opacity < 0.999) m.material.opacity = 1;
-  }
+  // Make sure all floor groups are visible — we control purely via opacity.
+  for (const fg of floorGroups.values()) fg.visible = true;
 
-  // Below the activation zoom, every floor stays visible (overview).
-  const zoomed = camera.zoom >= XRAY_ZOOM_THRESHOLD;
-  if (!zoomed) {
-    for (const fg of floorGroups.values()) fg.visible = true;
+  // Global "how zoomed in" factor: 0 at overview, 1 fully zoomed in.
+  const zoomFade = THREE.MathUtils.smoothstep(
+    camera.zoom, XRAY_ZOOM_START, XRAY_ZOOM_FULL,
+  );
+
+  if (zoomFade < 0.005) {
+    // Overview: reset all opacities to full.
+    for (const m of occluders) {
+      if (m.material.opacity < 0.999) m.material.opacity = 1;
+    }
     return;
   }
 
-  // Zoomed in: hide ENTIRE upper floors so nothing leaks through —
-  // wall caps, line edges, route segments, props, labels, all of it.
-  // The focused floor (where the camera is aimed) and any floors below
-  // it stay visible.
+  // Camera basis vectors (constant under the iso lock, but cheap to read).
+  _xrayRight.setFromMatrixColumn(camera.matrix, 0);
+  _xrayUp.setFromMatrixColumn(camera.matrix, 1);
+  const halfH = FRUSTUM_SIZE / (2 * camera.zoom);
+  const halfW = halfH * (window.innerWidth / window.innerHeight);
+
   const focusY = controls.target.y;
-  for (const fg of floorGroups.values()) {
-    const floorY = fg.position.y;
-    fg.visible = floorY <= focusY + 1.0;
+
+  for (const m of occluders) {
+    const floorY = m.userData.floorGroup?.position.y;
+    // Floors at or below the focus stay completely solid.
+    if (floorY === undefined || floorY <= focusY + 1.0) {
+      if (m.material.opacity < 0.999) m.material.opacity = 1;
+      continue;
+    }
+
+    // Project the mesh's world position into screen-space relative to the
+    // OrbitControls target (which sits at the centre of the screen).
+    m.getWorldPosition(_xrayTmp).sub(controls.target);
+    const sx = _xrayTmp.dot(_xrayRight) / halfW;
+    const sy = _xrayTmp.dot(_xrayUp)    / halfH;
+    const radial = Math.sqrt(sx * sx + sy * sy);
+
+    // Oval mask: 1 dead-center, 0 past XRAY_RADIAL_OUT. So things at the
+    // centre of the view fade much more aggressively than things at the
+    // edge of the screen.
+    const radialMask = 1 - THREE.MathUtils.smoothstep(
+      XRAY_RADIAL_IN, XRAY_RADIAL_OUT, radial,
+    );
+
+    const fade = zoomFade * radialMask;
+    const target = THREE.MathUtils.lerp(1, XRAY_MIN_OPACITY, fade);
+    if (Math.abs(m.material.opacity - target) > 0.005) {
+      m.material.opacity = target;
+    }
   }
 }
 
