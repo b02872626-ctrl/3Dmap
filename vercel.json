@@ -1,0 +1,5 @@
+{
+  "outputDirectory": "app",
+  "cleanUrls": true,
+  "trailingSlash": false
+}
