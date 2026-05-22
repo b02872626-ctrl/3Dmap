@@ -319,7 +319,7 @@ function buildSitumFloor(group, floor, roomGroups) {
   }
 }
 
-const SITUM_BLOCK_HEIGHT = 1.4;   // height of each room's 3D block
+const SITUM_BLOCK_HEIGHT = 1.6;   // height of each room's 3D block
 const SITUM_BLOCK_LIFT   = 0.05;  // sit just above the floor plane
 
 function buildSitumRoomBlock(room) {
@@ -330,37 +330,60 @@ function buildSitumRoomBlock(room) {
   const cx = offsetX(x + w / 2);
   const cz = offsetZ(z + d / 2);
 
-  // Larger inset so the SVG painted room outline is clearly visible
-  // around the block — makes alignment easy to verify by eye.
-  const inset = 0.25;
-  const blockW = Math.max(w - inset * 2, 0.3);
-  const blockD = Math.max(d - inset * 2, 0.3);
-
   const mat = new THREE.MeshStandardMaterial({
     color: baseColor,
     roughness: 0.55,
     metalness: 0.08,
     emissive: baseColor.clone().multiplyScalar(0.08),
-    transparent: true,
-    opacity: 0.92,
   });
-  const block = new THREE.Mesh(
-    new THREE.BoxGeometry(blockW, SITUM_BLOCK_HEIGHT, blockD),
-    mat,
-  );
-  block.position.set(cx, SITUM_BLOCK_HEIGHT / 2 + SITUM_BLOCK_LIFT, cz);
+
+  let block;
+  if (Array.isArray(room.polygon) && room.polygon.length >= 3) {
+    // Build a THREE.Shape from the SVG polygon vertices, then extrude.
+    // SVG points are in WORLD coords (X, Y_svg) — Y_svg maps to world Z.
+    // ExtrudeGeometry extrudes in +Z of the shape's local frame, so we
+    // build the shape in XY, then rotate it -π/2 around X so it lies
+    // flat with extrusion going up (+Y world).
+    const shape = new THREE.Shape();
+    for (let i = 0; i < room.polygon.length; i++) {
+      const [px, py] = room.polygon[i];
+      // Convert world coords → plan-centered local coords
+      const lx = px - planCenter.x;
+      const lz = py - planCenter.z;
+      if (i === 0) shape.moveTo(lx, lz);
+      else         shape.lineTo(lx, lz);
+    }
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: SITUM_BLOCK_HEIGHT,
+      bevelEnabled: false,
+    });
+    // Shape was authored in XZ (treating shape's Y as world Z). Rotate
+    // -π/2 around X so the extrusion axis becomes +Y (up).
+    geo.rotateX(-Math.PI / 2);
+    block = new THREE.Mesh(geo, mat);
+    block.position.y = SITUM_BLOCK_LIFT + SITUM_BLOCK_HEIGHT;
+  } else {
+    // Fallback: axis-aligned box if no polygon attached
+    const inset = 0.06;
+    const blockW = Math.max(w - inset * 2, 0.3);
+    const blockD = Math.max(d - inset * 2, 0.3);
+    block = new THREE.Mesh(
+      new THREE.BoxGeometry(blockW, SITUM_BLOCK_HEIGHT, blockD),
+      mat,
+    );
+    block.position.set(cx, SITUM_BLOCK_HEIGHT / 2 + SITUM_BLOCK_LIFT, cz);
+  }
   block.castShadow = true;
   block.receiveShadow = true;
   group.add(block);
 
-  // Subtle dark outline at the bottom of the block, like the room
-  // outlines in the Situm reference shots.
+  // Subtle dark outline tracing the block's silhouette
   const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(block.geometry),
+    new THREE.EdgesGeometry(block.geometry, 1),
     new THREE.LineBasicMaterial({
       color: 0x2a241e,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.45,
     }),
   );
   edges.position.copy(block.position);

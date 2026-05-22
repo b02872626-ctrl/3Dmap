@@ -208,11 +208,17 @@ const aj = (id, name, category, x, z, w, d, floor, extra = {}) => ({
   id, name, category, floor, footprint: { x, z, w, d }, ...extra,
 });
 
-// Coordinates below are SVG bounding boxes (Asset 1 + Asset 2) scaled to
-// world units at scale 0.06, no offset — so plan coords directly align
-// with the SVG texture mapped onto the floor plane.
-//   world_x = svg_x * 0.06     world_w = svg_w * 0.06
-//   world_z = svg_y * 0.06     world_d = svg_h * 0.06
+// Aba Jifar room polygons extracted from the official SVG floor plans by
+// tools/build-aba-jifar-rooms.js. Each entry has both the axis-aligned
+// bbox (used for camera framing, search, etc.) and the EXACT polygon
+// vertices in world coords, which floors.js extrudes via THREE.Shape so
+// the 3D block matches the rotated SVG polygon shape exactly.
+import abaJifarRoomData from "./aba-jifar-rooms.json" with { type: "json" };
+
+// Build a quick lookup of polygon vertices by room id so we can attach
+// them as `room.polygon` when assembling ABA_ROOMS below.
+const abaPolygons = new Map(abaJifarRoomData.rooms.map((r) => [r.id, r.points]));
+
 const ABA_ROOMS = [
   // ============ Ground Floor (1) ============
 
@@ -253,6 +259,13 @@ const ABA_ROOMS = [
   aj("13", "Aba Jifar Family Room 2",      "family",     24.24, 13.50, 3.66, 3.30, 2),
   aj("12", "Aba Jifar Family Room 1",      "family",     27.84, 13.98, 1.86, 3.06, 2),
 ];
+
+// Attach polygon vertices (from the SVG) to each room so floors.js can
+// extrude the actual rotated shape instead of an axis-aligned box.
+for (const r of ABA_ROOMS) {
+  const poly = abaPolygons.get(r.id);
+  if (poly) r.polygon = poly;
+}
 
 // Match the SVG viewBox (1190.65 × 830.28) at scale 0.06.
 const ABA_PLAN_BOUNDS = { minX: 0, maxX: 71.44, minZ: 0, maxZ: 49.82 };

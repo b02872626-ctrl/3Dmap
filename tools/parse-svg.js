@@ -26,6 +26,7 @@ function addBBox(cls, coords) {
   const color = classToColor.get(cls);
   if (!color || color === "#fff" || color === "#ffffff") return;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const pts = [];
   for (let i = 0; i < coords.length; i += 2) {
     const x = coords[i], y = coords[i + 1];
     if (!isFinite(x) || !isFinite(y)) continue;
@@ -33,6 +34,7 @@ function addBBox(cls, coords) {
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;
     if (y > maxY) maxY = y;
+    pts.push([+x.toFixed(2), +y.toFixed(2)]);
   }
   if (!isFinite(minX) || !isFinite(minY)) return;
   found.push({
@@ -41,6 +43,7 @@ function addBBox(cls, coords) {
     w: maxX - minX, h: maxY - minY,
     cx: (minX + maxX) / 2, cy: (minY + maxY) / 2,
     area: (maxX - minX) * (maxY - minY),
+    points: pts,
   });
 }
 
