@@ -8,7 +8,7 @@
 //  Hovering / clicking walks up from any hit child to that group.
 // =============================================================
 import * as THREE from "three";
-import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, ROADS } from "./data.js";
+import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, ROADS, BUILDING_STYLE } from "./data.js";
 
 const SLAB_PAD       = 1.0;
 const SLAB_THICK     = 0.4;
@@ -87,11 +87,24 @@ export function buildFloors() {
   const roomGroups = [];
   const adjacency = buildAdjacency();
 
+  const isSitum = BUILDING_STYLE === "situm";
+
   for (const floor of FLOORS) {
     const group = new THREE.Group();
     group.name = `floor-${floor.id}`;
     group.userData = { floorId: floor.id, baseY: floor.y };
     group.position.y = floor.y;
+
+    // -----------------------------------------------------------------
+    //  Situm-style branch: SVG texture as the floor + extruded room
+    //  blocks. Skips the procedural slab / tiles / walls completely.
+    // -----------------------------------------------------------------
+    if (isSitum && floor.mapTexture) {
+      buildSitumFloor(group, floor, roomGroups);
+      floorGroups.set(floor.id, group);
+      root.add(group);
+      continue;
+    }
 
     // Slab beneath the floor tiles — sized + positioned to the ACTUAL room
     // cluster on this floor (not the full PLAN_BOUNDS), so each floor's
@@ -213,6 +226,111 @@ export function buildFloors() {
   }
 
   return { root, floorGroups, roomGroups, occluders };
+}
+
+// =============================================================
+//  Situm-style floor: SVG texture plane + extruded room blocks
+// =============================================================
+function buildSitumFloor(group, floor, roomGroups) {
+  // Floor plane sized to the full SVG viewBox (PLAN_BOUNDS).
+  const planW = PLAN_BOUNDS.maxX - PLAN_BOUNDS.minX;
+  const planD = PLAN_BOUNDS.maxZ - PLAN_BOUNDS.minZ;
+
+  // Load the SVG as an HTMLImage → CanvasTexture so it works for any
+  // SVG without needing a separate loader.
+  const img = new Image();
+  const tex = new THREE.Texture(img);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 8;
+  img.crossOrigin = "anonymous";
+  img.onload = () => { tex.needsUpdate = true; };
+  img.src = floor.mapTexture;
+
+  const floorMat = new THREE.MeshStandardMaterial({
+    map: tex,
+    color: 0xffffff,
+    roughness: 0.95,
+    metalness: 0,
+    transparent: true,    // some SVGs include transparency
+    depthWrite: true,
+  });
+  const floorPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(planW, planD),
+    floorMat,
+  );
+  floorPlane.rotation.x = -Math.PI / 2;
+  // Plane is centred at floor-local (0, 0, 0). The room build offsets
+  // already use planCenter to translate plan→local, so this lines up.
+  floorPlane.position.set(0, 0, 0);
+  floorPlane.receiveShadow = true;
+  group.add(floorPlane);
+
+  // Render each room on this floor as an extruded block sitting above
+  // the floor texture. Solid 3D blocks — no walls, tile, props.
+  const roomsHere = ROOMS.filter((r) => r.floor === floor.id);
+  for (const room of roomsHere) {
+    const rg = buildSitumRoomBlock(room);
+    group.add(rg);
+    roomGroups.push(rg);
+  }
+}
+
+const SITUM_BLOCK_HEIGHT = 2.6;   // height of each room's 3D block
+const SITUM_BLOCK_LIFT   = 0.05;  // sit just above the floor plane
+
+function buildSitumRoomBlock(room) {
+  const group = new THREE.Group();
+  const cat = CATEGORIES[room.category] || CATEGORIES.amenity;
+  const baseColor = new THREE.Color(cat.color);
+  const { x, z, w, d } = room.footprint;
+  const cx = offsetX(x + w / 2);
+  const cz = offsetZ(z + d / 2);
+
+  // Slight inset so the SVG's painted room shows around the block edge.
+  const inset = 0.06;
+  const blockW = Math.max(w - inset * 2, 0.3);
+  const blockD = Math.max(d - inset * 2, 0.3);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: baseColor,
+    roughness: 0.55,
+    metalness: 0.08,
+    emissive: baseColor.clone().multiplyScalar(0.08),
+  });
+  const block = new THREE.Mesh(
+    new THREE.BoxGeometry(blockW, SITUM_BLOCK_HEIGHT, blockD),
+    mat,
+  );
+  block.position.set(cx, SITUM_BLOCK_HEIGHT / 2 + SITUM_BLOCK_LIFT, cz);
+  block.castShadow = true;
+  block.receiveShadow = true;
+  group.add(block);
+
+  // Subtle dark outline at the bottom of the block, like the room
+  // outlines in the Situm reference shots.
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(block.geometry),
+    new THREE.LineBasicMaterial({
+      color: 0x2a241e,
+      transparent: true,
+      opacity: 0.4,
+    }),
+  );
+  edges.position.copy(block.position);
+  group.add(edges);
+
+  group.userData = {
+    kind: "room",
+    roomId: room.id,
+    room,
+    baseColor: baseColor.clone(),
+    originalEmissive: baseColor.clone().multiplyScalar(0.08),
+    tile: block,
+    highlightTargets: [block],
+  };
+  return group;
 }
 
 // =============================================================
