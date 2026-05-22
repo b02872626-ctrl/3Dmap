@@ -209,57 +209,66 @@ const aj = (id, name, category, x, z, w, d, floor, extra = {}) => ({
 const ABA_ROOMS = [
   // ---- Ground Floor (1) ----
 
-  // Palace block (south-west). Outer footprint roughly x[3,9] × z[5,11].
-  aj("2",  "Geda System",                              "history",    3,   5,   6,   1.5, 1),
-  aj("4",  "Aba Jifar II",                             "royal",      3,   6.5, 3.5, 4.5, 1),
-  aj("3",  "State Formation",                          "history",    6.5, 6.5, 2.5, 2,   1),
-  aj("1",  "Entrance",                                 "entrance",   6.5, 8.5, 2.5, 2.5, 1, { entrance: true }),
+  // Palace block (south-west, square ~7×7 with veranda).
+  // Top strip → main left half → small right column (split into 3/1).
+  aj("2",  "Geda System",                              "history",    3,   7,   7,   1.5, 1),
+  aj("4",  "Aba Jifar II",                             "royal",      3,   8.5, 4,   5.5, 1),
+  aj("3",  "State Formation",                          "history",    7,   8.5, 3,   2.5, 1),
+  aj("1",  "Entrance",                                 "entrance",   7,   11,  3,   3,   1, { entrance: true }),
 
   // Religion pavilion (free-standing, south of palace)
-  aj("5",  "Role of Islam in State Formation",         "religion",   4,   13.5,5,   4.5, 1),
+  aj("5",  "Role of Islam in State Formation",         "religion",   4,   16,  5,   4.5, 1),
 
-  // Larger building (centre-north). Outer footprint x[16,24] × z[2.5,11].
-  aj("18", "Courtyard",                                "ceremonial", 16,  2.5, 8,   2.5, 1),
-  aj("16", "Aba Jifar II Palace Construction Method", "history",    16,  5,   2,   2.5, 1),
-  aj("17", "Wrestling",                                "culture",    18,  5,   4,   3.5, 1),
-  aj("15", "Gibe Kingdom",                             "kingdom",    16,  8.5, 8,   2.5, 1),
+  // Larger building (centre-north, rectangular ~10×10).
+  // Ground floor is SOLID: Courtyard wraps the top, Construction +
+  // Wrestling occupy the middle, Gibe Kingdom fills the bottom row.
+  aj("18", "Courtyard",                                "ceremonial", 15,  2,   10,  3,   1),
+  aj("16", "Aba Jifar II Palace Construction Method", "history",    15,  5,   2.5, 2.5, 1),
+  aj("17", "Wrestling",                                "culture",    17.5,5,   5,   3.5, 1),
+  aj("15", "Gibe Kingdom",                             "kingdom",    15,  9.5, 10,  2.5, 1),
 
   // Women's pavilion (free-standing, north-east)
   aj("19", "Women's Role in the Kingdom",              "womens",     27,  2,   5.5, 5.5, 1),
 
   // Banquet Hall (free-standing, south-east)
-  aj("20", "Banquet Hall",                             "ceremonial", 29,  14,  7,   4,   1),
+  aj("20", "Banquet Hall",                             "ceremonial", 29,  16,  7,   4,   1),
 
-  // ---- First Floor (2) — same footprints as the multi-storey buildings above ----
+  // ---- First Floor (2) ----
 
-  // Palace block upstairs
-  aj("8",  "Administration and Diplomacy", "governance", 3,   5,   6,   1.5, 2),
-  aj("7",  "Military and Defense",         "governance", 3,   6.5, 3,   4.5, 2),
-  aj("6",  "Justice Dispensation",         "governance", 6,   6.5, 3,   4.5, 2),
+  // Palace block upstairs — same 7×7 footprint, three rooms: Admin top
+  // strip, Military on the left (with stairs), Justice on the right.
+  aj("8",  "Administration and Diplomacy", "governance", 3,   7,   7,   1.5, 2),
+  aj("7",  "Military and Defense",         "governance", 3,   8.5, 4,   5.5, 2),
+  aj("6",  "Justice Dispensation",         "governance", 7,   8.5, 3,   5.5, 2),
 
-  // Larger building upstairs
-  aj("10", "Industry",                     "economy",    17,  2.5, 6,   2.5, 2),
-  aj("9",  "Agriculture",                  "economy",    16,  5,   2,   2,   2),
-  aj("11", "Trade",                        "economy",    22,  5,   2,   2.5, 2),
-  aj("14", "Aba Jifar Family Room 3",      "family",     17,  7.5, 2,   2,   2),
-  aj("13", "Aba Jifar Family Room 2",      "family",     19,  7.5, 2,   2,   2),
-  aj("12", "Aba Jifar Family Room 1",      "family",     21,  7.5, 2,   2,   2),
+  // Larger building upstairs — U-shape with an open central atrium.
+  //   Industry runs the full top, Agriculture is the left wing,
+  //   Trade is the right wing; the centre is empty (open to courtyard
+  //   skylight below).
+  aj("10", "Industry",                     "economy",    15,  2,   10,  3,   2),
+  aj("9",  "Agriculture",                  "economy",    15,  5,   2.5, 4.5, 2),
+  aj("11", "Trade",                        "economy",    22.5,5,   2.5, 4.5, 2),
+
+  // Family rooms — separate small structures south of the larger
+  // building (a row of three detached buildings).
+  aj("14", "Aba Jifar Family Room 3",      "family",     16,  12.5, 2.5, 2.5, 2),
+  aj("13", "Aba Jifar Family Room 2",      "family",     18.5,12.5, 3,   2.5, 2),
+  aj("12", "Aba Jifar Family Room 1",      "family",     21.5,12.5, 2.5, 2.5, 2),
 ];
 
 const ABA_PLAN_BOUNDS = { minX: 0, maxX: 36, minZ: 0, maxZ: 22 };
 
 // Roads / paved courts visible in the site plan — extruded slightly above
-// the slab so they read as cobbled pavement. Color is a dark warm grey
-// matching the hatched road areas in the PDF.
+// the slab so they read as cobbled pavement.
 const ABA_ROADS = [
-  // Main south plaza — large paved court along the bottom of the plan
-  { x: 0,  z: 17.5, w: 36, d: 4.5, color: 0x4a443c, label: "South plaza" },
+  // South plaza — wide paved court along the bottom of the site
+  { x: 0,  z: 20, w: 36, d: 2,   color: 0x4a443c, label: "South plaza" },
   // Connector between palace block and larger building
-  { x: 9,  z: 6,    w: 7,  d: 5,   color: 0x4a443c, label: "Central path" },
+  { x: 10, z: 7,  w: 5,  d: 7,   color: 0x4a443c, label: "Central path" },
+  // Approach in front of the larger building (front terrace)
+  { x: 15, z: 12, w: 10, d: 0.5, color: 0x4a443c, label: "Terrace edge" },
   // Path leading to the Banquet Hall
-  { x: 23, z: 14.5, w: 6,  d: 3,   color: 0x4a443c, label: "Banquet path" },
-  // Approach in front of the larger building's east veranda
-  { x: 24, z: 7,    w: 3,  d: 5,   color: 0x4a443c, label: "East approach" },
+  { x: 25, z: 16, w: 4,  d: 4,   color: 0x4a443c, label: "Banquet path" },
 ];
 
 // =============================================================
