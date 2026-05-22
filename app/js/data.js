@@ -242,12 +242,13 @@ const ABA_ROOMS = [
   aj("6",  "Justice Dispensation",         "governance", 7,   8.5, 3,   5.5, 2),
 
   // Larger building upstairs — U-shape with an open central atrium.
-  //   Industry runs the full top, Agriculture is the left wing,
-  //   Trade is the right wing; the centre is empty (open to courtyard
-  //   skylight below).
-  aj("10", "Industry",                     "economy",    15,  2,   10,  3,   2),
-  aj("9",  "Agriculture",                  "economy",    15,  5,   2.5, 4.5, 2),
-  aj("11", "Trade",                        "economy",    22.5,5,   2.5, 4.5, 2),
+  // Wings (Agriculture, Trade) run the FULL top-to-bottom height of the
+  // U at the left and right sides; Industry sits BETWEEN them at the
+  // top. The remaining centre rectangle is empty (open atrium above
+  // the ground-floor Courtyard).
+  aj("9",  "Agriculture",                  "economy",    15,  2,   2,   7.5, 2),
+  aj("10", "Industry",                     "economy",    17,  2,   6,   3,   2),
+  aj("11", "Trade",                        "economy",    23,  2,   2,   7.5, 2),
 
   // Family rooms — separate small structures south of the larger
   // building (a row of three detached buildings).
