@@ -73,7 +73,7 @@ function updateCameraLerp() {
   if (!cameraLerp) return;
   controls.target.lerp(cameraLerp.target, 0.15);
   // Camera must follow target to keep the iso lock
-  camera.position.copy(controls.target).add(_isoOffset);
+  camera.position.copy(controls.target).add(_viewOffset);
   cameraLerp.t = Math.min(1, cameraLerp.t + 0.06);
   if (cameraLerp.t >= 1) cameraLerp = null;
 }
@@ -264,10 +264,47 @@ function hideDetails() { detailsEl.classList.remove("visible"); }
 // target in lockstep, so the focus lands precisely on the clicked room.
 let flyAnim = null;
 
-// Ortho-iso camera lock: the camera always sits at target + ISO_DIR*dist.
-// flyTo lerps the look-at TARGET and camera.zoom; the camera POSITION is
-// just derived from the target each frame so the angle never changes.
-const _isoOffset = ISO_DIR.clone().multiplyScalar(ISO_DISTANCE);
+// Camera-direction lock. The camera always sits at target + viewDir*dist;
+// flyTo lerps the look-at TARGET and camera.zoom while viewDir stays
+// constant, so the angle never changes mid-fly. The user can toggle
+// between iso and (near) top-down — viewDir morphs over ~0.7s.
+//
+// TOP_DIR keeps a tiny X/Z bias so the lookAt isn't degenerate (forward
+// exactly opposite of camera.up).
+const TOP_DIR = new THREE.Vector3(0.001, 1, 0.001).normalize();
+const viewDir = ISO_DIR.clone();
+const _viewOffset = new THREE.Vector3();
+function syncViewOffset() {
+  _viewOffset.copy(viewDir).multiplyScalar(ISO_DISTANCE);
+  return _viewOffset;
+}
+syncViewOffset();
+
+let viewMode = "iso";   // "iso" | "top"
+let viewMorph = null;   // { fromDir, toDir, t, dur }
+
+function setViewMode(mode) {
+  if (mode === viewMode) return;
+  viewMode = mode;
+  const targetDir = mode === "top" ? TOP_DIR : ISO_DIR;
+  viewMorph = {
+    fromDir: viewDir.clone(),
+    toDir:   targetDir.clone(),
+    t: 0, dur: 50,
+  };
+}
+
+function updateViewMorph() {
+  if (!viewMorph) return;
+  viewMorph.t++;
+  const k = Math.min(1, viewMorph.t / viewMorph.dur);
+  const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);
+  viewDir.copy(viewMorph.fromDir).lerp(viewMorph.toDir, ease).normalize();
+  syncViewOffset();
+  // Keep camera locked to the new offset against the live target.
+  camera.position.copy(controls.target).add(_viewOffset);
+  if (k >= 1) viewMorph = null;
+}
 
 function flyToRoom(group) {
   const room = group.userData.room;
@@ -317,7 +354,7 @@ function updateFly() {
   const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);   // cosine ease in/out
   controls.target.lerpVectors(flyAnim.tgtFrom, flyAnim.tgtTo, ease);
   // Camera position is FIXED relative to target — iso direction, iso distance
-  camera.position.copy(controls.target).add(_isoOffset);
+  camera.position.copy(controls.target).add(_viewOffset);
   camera.zoom = THREE.MathUtils.lerp(flyAnim.zoomFrom, flyAnim.zoomTo, ease);
   camera.updateProjectionMatrix();
   if (k >= 1) {
@@ -434,6 +471,21 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".search")) searchResults.classList.remove("open");
 });
 
+// ---------------- View toggle (iso ↔ top) ----------------
+(function setupViewToggle() {
+  const btn = document.getElementById("toggle-view");
+  const lbl = document.getElementById("view-label");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const next = viewMode === "iso" ? "top" : "iso";
+    setViewMode(next);
+    btn.classList.toggle("active", next === "top");
+    btn.setAttribute("aria-pressed", next === "top" ? "true" : "false");
+    btn.title = next === "top" ? "Switch back to isometric view" : "Switch to top-down view";
+    if (lbl) lbl.textContent = next === "top" ? "Iso View" : "Top View";
+  });
+})();
+
 // ---------------- Building tabs (top bar) ----------------
 (function setupBuildingTabs() {
   const tabsEl = document.getElementById("building-tabs");
@@ -537,7 +589,7 @@ function frameInitialView(animate = false) {
     flyTo(targetVec, zoom, 55);
   } else {
     controls.target.copy(targetVec);
-    camera.position.copy(targetVec).add(_isoOffset);
+    camera.position.copy(targetVec).add(_viewOffset);
     camera.zoom = zoom;
     camera.updateProjectionMatrix();
     controls.update();
@@ -888,6 +940,7 @@ start(() => {
   updateCameraLerp();
   animateFloorY();
   updateFly();
+  updateViewMorph();
   routeLayer.animate();
   updateXray();
 });
