@@ -206,70 +206,70 @@ const aj = (id, name, category, x, z, w, d, floor, extra = {}) => ({
   id, name, category, floor, footprint: { x, z, w, d }, ...extra,
 });
 
+// Coordinates below are SVG bounding boxes scaled to world units. Each
+// room is annotated with the SVG bbox it came from.
+//   world_x = (svg_x - 160) * 0.06     world_w = svg_w * 0.06
+//   world_z = (svg_y -  60) * 0.06     world_d = svg_h * 0.06
 const ABA_ROOMS = [
-  // ---- Ground Floor (1) ----
+  // ============ Ground Floor (1) ============
 
-  // Palace block (south-west, square ~7×7 with veranda).
-  // Top strip → main left half → small right column (split into 3/1).
-  aj("2",  "Geda System",                              "history",    3,   7,   7,   1.5, 1),
-  aj("4",  "Aba Jifar II",                             "royal",      3,   8.5, 4,   5.5, 1),
-  aj("3",  "State Formation",                          "history",    7,   8.5, 3,   2.5, 1),
-  aj("1",  "Entrance",                                 "entrance",   7,   11,  3,   3,   1, { entrance: true }),
+  // Palace block (south-west). Aba Jifar II is the large main room with
+  // three smaller rooms stacked along its east side.
+  aj("4",  "Aba Jifar II",                             "royal",       1.50, 11.94, 4.32, 5.88, 1),
+  aj("2",  "Geda System",                              "history",     6.18, 12.12, 2.46, 1.56, 1),
+  aj("3",  "State Formation",                          "history",     5.82, 13.86, 2.58, 1.98, 1),
+  aj("1",  "Entrance",                                 "entrance",    5.64, 16.08, 2.70, 1.92, 1, { entrance: true }),
 
   // Religion pavilion (free-standing, south of palace)
-  aj("5",  "Role of Islam in State Formation",         "religion",   4,   16,  5,   4.5, 1),
+  aj("5",  "Role of Islam in State Formation",         "religion",    4.26, 20.88, 3.84, 2.94, 1),
 
-  // Larger building (centre-north, rectangular ~10×10).
-  // Ground floor is SOLID: Courtyard wraps the top, Construction +
-  // Wrestling occupy the middle, Gibe Kingdom fills the bottom row.
-  aj("18", "Courtyard",                                "ceremonial", 15,  2,   10,  3,   1),
-  aj("16", "Aba Jifar II Palace Construction Method", "history",    15,  5,   2.5, 2.5, 1),
-  aj("17", "Wrestling",                                "culture",    17.5,5,   5,   3.5, 1),
-  aj("15", "Gibe Kingdom",                             "kingdom",    15,  9.5, 10,  2.5, 1),
+  // Larger building (centre, square plan). Ground floor solid.
+  aj("16", "Aba Jifar II Palace Construction Method", "history",     12.24,  1.14, 2.40, 5.10, 1),
+  aj("18", "Courtyard",                                "ceremonial", 14.16,  1.32, 8.58, 7.62, 1),
+  aj("17", "Wrestling",                                "culture",    15.12,  4.44, 4.08, 3.84, 1),
+  aj("15", "Gibe Kingdom",                             "kingdom",    12.78,  9.84, 7.20, 3.54, 1),
 
-  // Women's pavilion (free-standing, north-east)
-  aj("19", "Women's Role in the Kingdom",              "womens",     27,  2,   5.5, 5.5, 1),
+  // Free-standing pavilions
+  aj("19", "Women's Role in the Kingdom",              "womens",     25.50,  0.90, 4.86, 4.02, 1),
+  aj("20", "Banquet Hall",                             "ceremonial", 44.10, 37.20, 8.70, 4.62, 1),
 
-  // Banquet Hall (free-standing, south-east)
-  aj("20", "Banquet Hall",                             "ceremonial", 29,  16,  7,   4,   1),
+  // ============ First Floor (2) ============
 
-  // ---- First Floor (2) ----
+  // Palace block upstairs — Admin runs across the top, Military on the
+  // left (the stair hall), Justice on the right.
+  aj("8",  "Administration and Diplomacy", "governance",  1.50, 12.00, 6.90, 1.50, 2),
+  aj("7",  "Military and Defense",         "governance",  1.50, 13.38, 3.96, 4.32, 2),
+  aj("6",  "Justice Dispensation",         "governance",  5.46, 13.68, 2.88, 4.08, 2),
 
-  // Palace block upstairs — same 7×7 footprint, three rooms: Admin top
-  // strip, Military on the left (with stairs), Justice on the right.
-  aj("8",  "Administration and Diplomacy", "governance", 3,   7,   7,   1.5, 2),
-  aj("7",  "Military and Defense",         "governance", 3,   8.5, 4,   5.5, 2),
-  aj("6",  "Justice Dispensation",         "governance", 7,   8.5, 3,   5.5, 2),
+  // Larger building upstairs — U-shape wrapping a central atrium.
+  // Industry tops the U, Agriculture is the left wing, Trade is the
+  // right wing. They overlap slightly at the corners as a single
+  // continuous shape (matches the SVG path).
+  aj("10", "Industry",                     "economy",    12.78,  0.72, 10.08, 2.16, 2),
+  aj("9",  "Agriculture",                  "economy",    11.70,  0.72,  2.10, 7.50, 2),
+  aj("11", "Trade",                        "economy",    20.88,  0.72,  1.98, 8.58, 2),
 
-  // Larger building upstairs — U-shape with an open central atrium.
-  // Wings (Agriculture, Trade) run the FULL top-to-bottom height of the
-  // U at the left and right sides; Industry sits BETWEEN them at the
-  // top. The remaining centre rectangle is empty (open atrium above
-  // the ground-floor Courtyard).
-  aj("9",  "Agriculture",                  "economy",    15,  2,   2,   7.5, 2),
-  aj("10", "Industry",                     "economy",    17,  2,   6,   3,   2),
-  aj("11", "Trade",                        "economy",    23,  2,   2,   7.5, 2),
-
-  // Family rooms — separate small structures south of the larger
-  // building (a row of three detached buildings).
-  aj("14", "Aba Jifar Family Room 3",      "family",     16,  12.5, 2.5, 2.5, 2),
-  aj("13", "Aba Jifar Family Room 2",      "family",     18.5,12.5, 3,   2.5, 2),
-  aj("12", "Aba Jifar Family Room 1",      "family",     21.5,12.5, 2.5, 2.5, 2),
+  // Family rooms — three detached small buildings inside the south
+  // courtyard area, just south of the larger building.
+  aj("14", "Aba Jifar Family Room 3",      "family",     12.72,  9.66, 1.98, 3.06, 2),
+  aj("13", "Aba Jifar Family Room 2",      "family",     14.64,  9.90, 3.66, 3.30, 2),
+  aj("12", "Aba Jifar Family Room 1",      "family",     18.24, 10.38, 1.86, 3.06, 2),
 ];
 
-const ABA_PLAN_BOUNDS = { minX: 0, maxX: 36, minZ: 0, maxZ: 22 };
+const ABA_PLAN_BOUNDS = { minX: 0, maxX: 54, minZ: 0, maxZ: 44 };
 
-// Roads / paved courts visible in the site plan — extruded slightly above
-// the slab so they read as cobbled pavement.
+// Roads / paved courts. These will be replaced with SVG-extracted paths
+// once we identify the path classes for the hatched road areas; for now
+// they're roughly placed based on the SVG layout.
 const ABA_ROADS = [
   // South plaza — wide paved court along the bottom of the site
-  { x: 0,  z: 20, w: 36, d: 2,   color: 0x4a443c, label: "South plaza" },
+  { x: 0,    z: 41,  w: 54,   d: 3,    color: 0x4a443c, label: "South plaza" },
   // Connector between palace block and larger building
-  { x: 10, z: 7,  w: 5,  d: 7,   color: 0x4a443c, label: "Central path" },
-  // Approach in front of the larger building (front terrace)
-  { x: 15, z: 12, w: 10, d: 0.5, color: 0x4a443c, label: "Terrace edge" },
-  // Path leading to the Banquet Hall
-  { x: 25, z: 16, w: 4,  d: 4,   color: 0x4a443c, label: "Banquet path" },
+  { x: 8.6,  z: 11,  w: 4.5,  d: 4,    color: 0x4a443c, label: "Central path" },
+  // Approach to the larger building (north court)
+  { x: 11.5, z: 8.5, w: 12,   d: 1,    color: 0x4a443c, label: "North court" },
+  // Path leading from larger building area to the Banquet Hall
+  { x: 25,   z: 35,  w: 19,   d: 4,    color: 0x4a443c, label: "Banquet path" },
 ];
 
 // =============================================================
