@@ -8,7 +8,7 @@
 //  Hovering / clicking walks up from any hit child to that group.
 // =============================================================
 import * as THREE from "three";
-import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS } from "./data.js";
+import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, ROADS } from "./data.js";
 
 const SLAB_PAD       = 1.0;
 const SLAB_THICK     = 0.4;
@@ -105,6 +105,16 @@ export function buildFloors() {
       minZ = Math.min(minZ, r.footprint.z);
       maxZ = Math.max(maxZ, r.footprint.z + r.footprint.d);
     }
+    // Extend ground-floor slab to include road footprints so paved areas
+    // aren't sticking off into the void.
+    if (floor.id === 1 && ROADS && ROADS.length) {
+      for (const r of ROADS) {
+        minX = Math.min(minX, r.x);
+        maxX = Math.max(maxX, r.x + r.w);
+        minZ = Math.min(minZ, r.z);
+        maxZ = Math.max(maxZ, r.z + r.d);
+      }
+    }
     const slabW  = (maxX - minX) + SLAB_PAD * 2;
     const slabD  = (maxZ - minZ) + SLAB_PAD * 2;
     const slabCx = ((minX + maxX) / 2) - planCenter.x;
@@ -125,6 +135,27 @@ export function buildFloors() {
     );
     edges.position.copy(slab.position);
     group.add(edges);
+
+    // Roads / paved paths — only on the ground floor (floor.id === 1)
+    if (floor.id === 1 && ROADS && ROADS.length) {
+      for (const road of ROADS) {
+        const rcx = offsetX(road.x + road.w / 2);
+        const rcz = offsetZ(road.z + road.d / 2);
+        const roadMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(road.w, 0.18, road.d),
+          new THREE.MeshStandardMaterial({
+            color: road.color ?? 0x4a443c,
+            roughness: 0.95,
+            metalness: 0,
+          }),
+        );
+        // Sit on the slab top with a very small lift to avoid z-fight
+        roadMesh.position.set(rcx, 0.03, rcz);
+        roadMesh.receiveShadow = true;
+        roadMesh.userData.kind = "road";
+        group.add(roadMesh);
+      }
+    }
 
     // Rooms (roomsHere was already computed above for slab sizing)
     for (const room of roomsHere) {
