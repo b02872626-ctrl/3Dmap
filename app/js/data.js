@@ -184,41 +184,69 @@ const CAM_PLAN_BOUNDS = { minX: 0, maxX: 44, minZ: 0, maxZ: 33 };
 // =============================================================
 
 const ABA_CATEGORIES = {
-  justice:     { label: "Justice Dispensation",       color: 0x5a5d39 },
-  military:    { label: "Military & Defense",         color: 0xb8ad88 },
-  admin:       { label: "Administration & Diplomacy", color: 0xc4b896 },
-  agriculture: { label: "Agriculture",                color: 0x7a8a4e },
-  industry:    { label: "Industry",                   color: 0x8a7048 },
-  trade:       { label: "Trade",                      color: 0xc9714f },
-  family:      { label: "Aba Jifar Family Rooms",     color: 0xb09a78 },
+  entrance:   { label: "Entrance",                 color: 0xe2a39e },
+  royal:      { label: "Aba Jifar II",             color: 0xd9cca0 },
+  history:    { label: "Founding History",         color: 0xb89f74 },
+  religion:   { label: "Religion in the Kingdom",  color: 0xc88a6e },
+  kingdom:    { label: "Gibe Kingdom",             color: 0x7d4e34 },
+  governance: { label: "Governance",               color: 0x5e6537 },
+  economy:    { label: "Economy",                  color: 0x6e4a2c },
+  culture:    { label: "Wrestling & Sport",        color: 0x9d9888 },
+  ceremonial: { label: "Ceremonial Halls",         color: 0xd1b25c },
+  womens:     { label: "Women in the Kingdom",     color: 0xc97784 },
+  family:     { label: "Family Rooms",             color: 0xb29a72 },
 };
 
 const ABA_FLOORS = [
   { id: 1, label: "Ground Floor", y: 0, height: 4.5, fbx: null },
+  { id: 2, label: "First Floor",  y: 6, height: 4.5, fbx: null },
 ];
 
-const aj = (id, name, category, x, z, w, d, extra = {}) => ({
-  id, name, category, floor: 1, footprint: { x, z, w, d }, ...extra,
+const aj = (id, name, category, x, z, w, d, floor, extra = {}) => ({
+  id, name, category, floor, footprint: { x, z, w, d }, ...extra,
 });
 
 const ABA_ROOMS = [
-  // Palace building (left cluster)
-  aj("8", "Administration and Diplomacy", "admin",     3,  4, 7, 2),
-  aj("7", "Military and Defense",         "military",  3,  6, 3, 5),
-  aj("6", "Justice Dispensation",         "justice",   6,  6, 4, 5),
+  // ---- Ground Floor (1) — founding history, ceremony, exhibits ----
 
-  // Agriculture pavilion (south of palace, free-standing)
-  aj("9", "Agriculture",                  "agriculture", 2, 14, 8, 3),
+  // Palace block (south-west) — same footprint shared with floor 2
+  aj("2",  "Geda System",                              "history",    3,   4,   6,   1.5, 1),
+  aj("4",  "Aba Jifar II",                             "royal",      3,   5.5, 3.5, 4.5, 1),
+  aj("3",  "State Formation",                          "history",    6.5, 5.5, 2,   2,   1),
+  aj("1",  "Entrance",                                 "entrance",   6.5, 7.5, 2,   2.5, 1, { entrance: true }),
 
-  // Family compound (right cluster)
-  aj("10", "Industry",                    "industry",   19, 2, 4, 3),
-  aj("14", "Aba Jifar Family Room 3",     "family",     18, 5, 3, 3),
-  aj("13", "Aba Jifar Family Room 2",     "family",     21, 5, 3, 3),
-  aj("12", "Aba Jifar Family Room 1",     "family",     24, 5, 3, 3),
-  aj("11", "Trade",                       "trade",      19, 9, 4, 3),
+  // Religion pavilion (free-standing, south of palace)
+  aj("5",  "Role of Islam in State Formation",         "religion",   4,   14,  3,   3,   1),
+
+  // Larger building (centre-north) — palace courtyard wing
+  aj("18", "Courtyard",                                "ceremonial", 16,  2,   7,   3,   1),
+  aj("16", "Aba Jifar II Palace Construction Method", "history",    16,  5,   2,   2,   1),
+  aj("17", "Wrestling",                                "culture",    18,  5,   4,   3,   1),
+  aj("15", "Gibe Kingdom",                             "kingdom",    16,  9,   7,   2,   1),
+
+  // Women's pavilion (free-standing, north-east)
+  aj("19", "Women's Role in the Kingdom",              "womens",     26,  2,   5,   5,   1),
+
+  // Banquet Hall (free-standing, south-east)
+  aj("20", "Banquet Hall",                             "ceremonial", 28,  14,  7,   4,   1),
+
+  // ---- First Floor (2) — governance, economy, residence ----
+
+  // Palace block upstairs
+  aj("8",  "Administration and Diplomacy", "governance", 3,   4,   6,   1.5, 2),
+  aj("7",  "Military and Defense",         "governance", 3,   5.5, 3,   4.5, 2),
+  aj("6",  "Justice Dispensation",         "governance", 6,   5.5, 3.5, 4.5, 2),
+
+  // Larger building upstairs (above courtyard wing)
+  aj("10", "Industry",                     "economy",    17,  2,   5,   3,   2),
+  aj("9",  "Agriculture",                  "economy",    16,  5,   2,   2,   2),
+  aj("11", "Trade",                        "economy",    22,  5,   2,   2.5, 2),
+  aj("14", "Aba Jifar Family Room 3",      "family",     17,  8,   2,   2,   2),
+  aj("13", "Aba Jifar Family Room 2",      "family",     19,  8,   2,   2,   2),
+  aj("12", "Aba Jifar Family Room 1",      "family",     21,  8,   2,   2,   2),
 ];
 
-const ABA_PLAN_BOUNDS = { minX: 0, maxX: 32, minZ: 0, maxZ: 20 };
+const ABA_PLAN_BOUNDS = { minX: 0, maxX: 36, minZ: 0, maxZ: 22 };
 
 // =============================================================
 //  Building registry + active-building selector
