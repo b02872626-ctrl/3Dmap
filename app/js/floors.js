@@ -245,12 +245,23 @@ function loadSvgAsCanvasTexture(url, texture) {
       const vbH = vb ? parseFloat(vb[4]) : 830;
       const aspect = vbW / vbH;
 
+      // Inject explicit width/height so the browser doesn't fall back to
+      // its default 300×150 intrinsic image size for SVGs that only
+      // specify viewBox. Without this, drawImage(img, 0, 0, W, H) ends
+      // up scaling content through a letterboxed default-size render
+      // and the painted polygons no longer line up with their literal
+      // viewBox coordinates.
+      let preparedSvg = svgText;
+      if (!/<svg[^>]*\swidth=/i.test(preparedSvg)) {
+        preparedSvg = preparedSvg.replace(/<svg\b/i, `<svg width="${vbW}" height="${vbH}"`);
+      }
+
       // Use a generous bitmap size so the SVG stays crisp when zoomed.
       const W = 2048;
       const H = Math.round(W / aspect);
 
       const blobUrl = URL.createObjectURL(
-        new Blob([svgText], { type: "image/svg+xml" }),
+        new Blob([preparedSvg], { type: "image/svg+xml" }),
       );
       const img = new Image();
       img.onload = () => {
