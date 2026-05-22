@@ -1,13 +1,16 @@
 // =============================================================
-//  Cincinnati Art Museum — 3D Map Data
-//  Approximate room footprints derived from the official PDF
-//  visitor-guide floor plans. Coordinates are in world units:
-//    x = east-west, z = north-south, origin at top-left of plan.
-//  Replace `fbx` field with a real path under /models/ to swap a
-//  floor's procedural geometry for an authored FBX model.
+//  3D Map Data — multiple buildings, selected via ?building= URL param.
+//
+//  Two buildings registered:
+//    - cam        : Cincinnati Art Museum (default)
+//    - aba-jifar  : Aba Jifar Palace (Jimma, Ethiopia)
+//
+//  All the existing exports (CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS)
+//  resolve to whichever building is active so the rest of the app
+//  doesn't have to change.
 // =============================================================
 
-export const CATEGORIES = {
+const CAM_CATEGORIES = {
   african:      { label: "African Art",                   color: 0xE5277B },
   american:     { label: "American Art",                   color: 0xE63946 },
   ancient:      { label: "Ancient Art",                    color: 0xF0A92B },
@@ -22,7 +25,7 @@ export const CATEGORIES = {
 };
 
 // Floor metadata
-export const FLOORS = [
+const CAM_FLOORS = [
   { id: 1, label: "First Floor",  y: 0,  height: 4.2, fbx: null },
   { id: 2, label: "Second Floor", y: 6,  height: 4.0, fbx: null },
   { id: 3, label: "Third Floor",  y: 12, height: 3.8, fbx: null },
@@ -165,7 +168,102 @@ const floor3 = [
   r("elevB-3", "Elevator B", "amenity", 22, 10, 2, 2, 3, { icon: "B" }),
 ];
 
-export const ROOMS = [...floor1, ...floor2, ...floor3];
+const CAM_ROOMS = [...floor1, ...floor2, ...floor3];
 
 // Plan bounds (used for camera framing)
-export const PLAN_BOUNDS = { minX: 0, maxX: 44, minZ: 0, maxZ: 33 };
+const CAM_PLAN_BOUNDS = { minX: 0, maxX: 44, minZ: 0, maxZ: 33 };
+
+// =============================================================
+//  ABA JIFAR PALACE — Jimma, Ethiopia
+//  Historic palace complex of King Aba Jifar II of Jimma Kingdom.
+//  Approximate room footprints derived from the architectural
+//  site plan. Single ground-floor level. Two main building
+//  clusters: the palace itself (Justice / Military / Admin) and
+//  the family compound (3 Aba Jifar family rooms) with adjacent
+//  Industry and Trade pavilions.
+// =============================================================
+
+const ABA_CATEGORIES = {
+  justice:     { label: "Justice Dispensation",       color: 0x5a5d39 },
+  military:    { label: "Military & Defense",         color: 0xb8ad88 },
+  admin:       { label: "Administration & Diplomacy", color: 0xc4b896 },
+  agriculture: { label: "Agriculture",                color: 0x7a8a4e },
+  industry:    { label: "Industry",                   color: 0x8a7048 },
+  trade:       { label: "Trade",                      color: 0xc9714f },
+  family:      { label: "Aba Jifar Family Rooms",     color: 0xb09a78 },
+};
+
+const ABA_FLOORS = [
+  { id: 1, label: "Ground Floor", y: 0, height: 4.5, fbx: null },
+];
+
+const aj = (id, name, category, x, z, w, d, extra = {}) => ({
+  id, name, category, floor: 1, footprint: { x, z, w, d }, ...extra,
+});
+
+const ABA_ROOMS = [
+  // Palace building (left cluster)
+  aj("8", "Administration and Diplomacy", "admin",     3,  4, 7, 2),
+  aj("7", "Military and Defense",         "military",  3,  6, 3, 5),
+  aj("6", "Justice Dispensation",         "justice",   6,  6, 4, 5),
+
+  // Agriculture pavilion (south of palace, free-standing)
+  aj("9", "Agriculture",                  "agriculture", 2, 14, 8, 3),
+
+  // Family compound (right cluster)
+  aj("10", "Industry",                    "industry",   19, 2, 4, 3),
+  aj("14", "Aba Jifar Family Room 3",     "family",     18, 5, 3, 3),
+  aj("13", "Aba Jifar Family Room 2",     "family",     21, 5, 3, 3),
+  aj("12", "Aba Jifar Family Room 1",     "family",     24, 5, 3, 3),
+  aj("11", "Trade",                       "trade",      19, 9, 4, 3),
+];
+
+const ABA_PLAN_BOUNDS = { minX: 0, maxX: 32, minZ: 0, maxZ: 20 };
+
+// =============================================================
+//  Building registry + active-building selector
+// =============================================================
+const BUILDING_LIST = [
+  {
+    id:         "cam",
+    name:       "Cincinnati Art Museum",
+    subtitle:   "3D Visitor Guide",
+    icon:       "✻",
+    accent:     "#ff4d6a",
+    categories: CAM_CATEGORIES,
+    floors:     CAM_FLOORS,
+    rooms:      CAM_ROOMS,
+    planBounds: CAM_PLAN_BOUNDS,
+  },
+  {
+    id:         "aba-jifar",
+    name:       "Aba Jifar Palace",
+    subtitle:   "Historic site • Jimma, Ethiopia",
+    icon:       "◈",
+    accent:     "#c9714f",
+    categories: ABA_CATEGORIES,
+    floors:     ABA_FLOORS,
+    rooms:      ABA_ROOMS,
+    planBounds: ABA_PLAN_BOUNDS,
+  },
+];
+
+function resolveActiveBuilding() {
+  // No window in non-browser env (build tools) — default to first.
+  if (typeof window === "undefined") return BUILDING_LIST[0];
+  const id = new URLSearchParams(window.location.search).get("building");
+  return BUILDING_LIST.find((b) => b.id === id) ?? BUILDING_LIST[0];
+}
+
+const ACTIVE = resolveActiveBuilding();
+
+// Existing app code imports these names directly — they now resolve
+// to whichever building was selected via ?building=...
+export const CATEGORIES  = ACTIVE.categories;
+export const FLOORS      = ACTIVE.floors;
+export const ROOMS       = ACTIVE.rooms;
+export const PLAN_BOUNDS = ACTIVE.planBounds;
+
+// New: lets the UI render the building selector and current branding.
+export const BUILDINGS         = BUILDING_LIST;
+export const ACTIVE_BUILDING   = ACTIVE;

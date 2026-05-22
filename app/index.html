@@ -19,13 +19,15 @@
 
   <!-- Top bar: brand + search -->
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">✻</span>
+    <button class="brand brand-trigger" id="building-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+      <span class="brand-mark" id="brand-mark">✻</span>
       <div class="brand-text">
-        <strong>Cincinnati Art Museum</strong>
-        <em>3D Visitor Guide</em>
+        <strong id="brand-name">Cincinnati Art Museum</strong>
+        <em id="brand-sub">3D Visitor Guide</em>
       </div>
-    </div>
+      <svg class="brand-chev" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+    </button>
+    <ul class="building-menu" id="building-menu" role="listbox" hidden></ul>
     <div class="search">
       <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M10 2a8 8 0 1 1-5.3 14L1 19.7 2.3 21l3.7-3.7A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
       <input id="search-input" type="text" placeholder="Search galleries, amenities…" autocomplete="off" />
