@@ -264,14 +264,16 @@ function hideDetails() { detailsEl.classList.remove("visible"); }
 // target in lockstep, so the focus lands precisely on the clicked room.
 let flyAnim = null;
 
-// Camera-direction lock. The camera always sits at target + viewDir*dist;
+// Camera-direction lock. Camera always sits at target + viewDir*dist;
 // flyTo lerps the look-at TARGET and camera.zoom while viewDir stays
 // constant, so the angle never changes mid-fly. The user can toggle
-// between iso and (near) top-down — viewDir morphs over ~0.7s.
-//
-// TOP_DIR keeps a tiny X/Z bias so the lookAt isn't degenerate (forward
-// exactly opposite of camera.up).
-const TOP_DIR = new THREE.Vector3(0.001, 1, 0.001).normalize();
+// between iso and pure top-down — viewDir AND camera.up morph together
+// over ~0.8 s so the plan ends up axis-aligned (north straight up) in
+// top view instead of stuck on a 45° tilt from a near-degenerate
+// lookAt.
+const TOP_DIR = new THREE.Vector3(0, 1, 0);
+const ISO_UP  = new THREE.Vector3(0, 1, 0);
+const TOP_UP  = new THREE.Vector3(0, 0, -1);   // screen "up" = -Z (north)
 const viewDir = ISO_DIR.clone();
 const _viewOffset = new THREE.Vector3();
 function syncViewOffset() {
@@ -281,16 +283,19 @@ function syncViewOffset() {
 syncViewOffset();
 
 let viewMode = "iso";   // "iso" | "top"
-let viewMorph = null;   // { fromDir, toDir, t, dur }
+let viewMorph = null;
 
 function setViewMode(mode) {
   if (mode === viewMode) return;
   viewMode = mode;
   const targetDir = mode === "top" ? TOP_DIR : ISO_DIR;
+  const targetUp  = mode === "top" ? TOP_UP  : ISO_UP;
   viewMorph = {
     fromDir: viewDir.clone(),
     toDir:   targetDir.clone(),
-    t: 0, dur: 50,
+    fromUp:  camera.up.clone(),
+    toUp:    targetUp.clone(),
+    t: 0, dur: 55,
   };
 }
 
@@ -300,9 +305,11 @@ function updateViewMorph() {
   const k = Math.min(1, viewMorph.t / viewMorph.dur);
   const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);
   viewDir.copy(viewMorph.fromDir).lerp(viewMorph.toDir, ease).normalize();
+  camera.up.copy(viewMorph.fromUp).lerp(viewMorph.toUp, ease).normalize();
   syncViewOffset();
-  // Keep camera locked to the new offset against the live target.
   camera.position.copy(controls.target).add(_viewOffset);
+  // Re-orient: lookAt rebuilds the camera matrix using the new up.
+  camera.lookAt(controls.target);
   if (k >= 1) viewMorph = null;
 }
 
