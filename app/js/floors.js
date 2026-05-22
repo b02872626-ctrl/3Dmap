@@ -319,7 +319,7 @@ function buildSitumFloor(group, floor, roomGroups) {
   }
 }
 
-const SITUM_BLOCK_HEIGHT = 2.6;   // height of each room's 3D block
+const SITUM_BLOCK_HEIGHT = 1.4;   // height of each room's 3D block
 const SITUM_BLOCK_LIFT   = 0.05;  // sit just above the floor plane
 
 function buildSitumRoomBlock(room) {
@@ -330,8 +330,9 @@ function buildSitumRoomBlock(room) {
   const cx = offsetX(x + w / 2);
   const cz = offsetZ(z + d / 2);
 
-  // Slight inset so the SVG's painted room shows around the block edge.
-  const inset = 0.06;
+  // Larger inset so the SVG painted room outline is clearly visible
+  // around the block — makes alignment easy to verify by eye.
+  const inset = 0.25;
   const blockW = Math.max(w - inset * 2, 0.3);
   const blockD = Math.max(d - inset * 2, 0.3);
 
@@ -340,6 +341,8 @@ function buildSitumRoomBlock(room) {
     roughness: 0.55,
     metalness: 0.08,
     emissive: baseColor.clone().multiplyScalar(0.08),
+    transparent: true,
+    opacity: 0.92,
   });
   const block = new THREE.Mesh(
     new THREE.BoxGeometry(blockW, SITUM_BLOCK_HEIGHT, blockD),
