@@ -12,7 +12,7 @@
 //  as the rendered floor groups), so a path can be drawn directly
 //  inside each floor group without transforms.
 // =============================================================
-import { ROOMS, FLOORS, PLAN_BOUNDS } from "./data.js";
+import { ROOMS, FLOORS, PLAN_BOUNDS, DOORS } from "./data.js";
 
 const PLAN_CENTER = {
   x: (PLAN_BOUNDS.minX + PLAN_BOUNDS.maxX) / 2,
@@ -23,6 +23,7 @@ const TOL = 0.05;          // edge-touching tolerance (units)
 const MIN_DOOR_OVERLAP = 0.7;
 const ELEVATOR_RIDE_COST = 18;  // "feels like" 18m of walking per floor change
 const BRIDGE_COST_FACTOR = 1.6; // penalty for synthesized corridor bridges
+const VIS_PAD = 0.05;           // segment-vs-box test pad (so a door's own wall doesn't block)
 
 const offsetX = (x) => x - PLAN_CENTER.x;
 const offsetZ = (z) => z - PLAN_CENTER.z;
@@ -100,12 +101,102 @@ export function buildGraph() {
     }
   }
 
-  // --- 4. Connectivity pass: per floor, find disconnected components and
+  // --- 4. Doors + outdoor visibility paths (ground floor only).
+  //        Each extracted door becomes a node. Doors link to their
+  //        attached room(s) via short edges (room → door midpoint).
+  //        Door-to-door edges exist whenever a straight line between
+  //        them doesn't cross any other room's bbox — i.e. the path
+  //        goes AROUND the buildings, never through them. These are
+  //        "the roads around the blocks". ---
+  if (DOORS && DOORS.length) {
+    const floor1RoomBoxes = ROOMS
+      .filter((r) => r.floor === 1)
+      .map((r) => ({
+        id: r.id,
+        x1: r.footprint.x,
+        z1: r.footprint.z,
+        x2: r.footprint.x + r.footprint.w,
+        z2: r.footprint.z + r.footprint.d,
+      }));
+
+    for (const door of DOORS) {
+      addNode({
+        id:   door.id,
+        x:    offsetX(door.x),
+        z:    offsetZ(door.z),
+        floor: 1,
+        kind:  "door",
+        door,
+      });
+      // door ↔ attached room edge
+      for (const roomId of door.rooms) {
+        const roomN = nodes.get(roomId);
+        if (!roomN) continue;
+        const doorN = nodes.get(door.id);
+        addEdge(roomId, door.id, dist2D(roomN, doorN));
+      }
+    }
+
+    // door ↔ door visibility paths
+    for (let i = 0; i < DOORS.length; i++) {
+      for (let j = i + 1; j < DOORS.length; j++) {
+        const a = DOORS[i], b = DOORS[j];
+        // Same-room door pairs always connect (intra-room movement).
+        const sharedRoom = a.rooms.some((r) => b.rooms.includes(r));
+        if (sharedRoom) {
+          const aN = nodes.get(a.id), bN = nodes.get(b.id);
+          addEdge(a.id, b.id, dist2D(aN, bN));
+          continue;
+        }
+        // Otherwise check line-of-sight against rooms that aren't
+        // hosting either door.
+        const ownRooms = new Set([...a.rooms, ...b.rooms]);
+        let blocked = false;
+        for (const box of floor1RoomBoxes) {
+          if (ownRooms.has(box.id)) continue;
+          if (segmentIntersectsBox(a.x, a.z, b.x, b.z, box)) {
+            blocked = true; break;
+          }
+        }
+        if (!blocked) {
+          const aN = nodes.get(a.id), bN = nodes.get(b.id);
+          addEdge(a.id, b.id, dist2D(aN, bN));
+        }
+      }
+    }
+  }
+
+  // --- 5. Connectivity pass: per floor, find disconnected components and
   //        bridge them with a single short edge to the largest component.
   //        This handles isolated amenities (entrance, café row…). ---
   ensureFloorConnectivity({ nodes, edges });
 
   return { nodes, edges };
+}
+
+// True if segment (x1,z1)→(x2,z2) crosses the axis-aligned box. Padded
+// inward so segments that just graze a wall (a door's own room) don't
+// count as crossings.
+function segmentIntersectsBox(x1, z1, x2, z2, box) {
+  const bx1 = box.x1 + VIS_PAD, bx2 = box.x2 - VIS_PAD;
+  const bz1 = box.z1 + VIS_PAD, bz2 = box.z2 - VIS_PAD;
+  const dx = x2 - x1, dz = z2 - z1;
+  let tEnter = 0, tExit = 1;
+  for (const [p, q] of [[-dx, x1 - bx1], [dx, bx2 - x1], [-dz, z1 - bz1], [dz, bz2 - z1]]) {
+    if (p === 0) {
+      if (q < 0) return false;
+    } else {
+      const t = q / p;
+      if (p < 0) {
+        if (t > tExit) return false;
+        if (t > tEnter) tEnter = t;
+      } else {
+        if (t < tEnter) return false;
+        if (t < tExit) tExit = t;
+      }
+    }
+  }
+  return tEnter < tExit;
 }
 
 function findSharedDoorway(a, b) {

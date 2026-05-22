@@ -8,7 +8,7 @@
 //  Hovering / clicking walks up from any hit child to that group.
 // =============================================================
 import * as THREE from "three";
-import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, ROADS, BUILDING_STYLE } from "./data.js";
+import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, ROADS, DOORS, BUILDING_STYLE } from "./data.js";
 
 const SLAB_PAD       = 1.0;
 const SLAB_THICK     = 0.4;
@@ -320,6 +320,17 @@ function buildSitumFloor(group, floor, roomGroups) {
   floorPlane.receiveShadow = true;
   group.add(floorPlane);
 
+  // Roads — only on the ground floor. Each road carries a `points`
+  // polygon traced from the SVG's hatched paving outline. We extrude
+  // that as a thin slab so the road's outline matches the painted
+  // paving, not just its bbox.
+  if (floor.id === 1 && ROADS && ROADS.length) {
+    for (const road of ROADS) {
+      const slab = buildRoadSlab(road);
+      if (slab) group.add(slab);
+    }
+  }
+
   // Render each room on this floor as an extruded block sitting above
   // the floor texture. Solid 3D blocks — no walls, tile, props.
   const roomsHere = ROOMS.filter((r) => r.floor === floor.id);
@@ -328,10 +339,210 @@ function buildSitumFloor(group, floor, roomGroups) {
     group.add(rg);
     roomGroups.push(rg);
   }
+
+  // Doors + visibility paths — floor 1 only.
+  if (floor.id === 1 && DOORS && DOORS.length) {
+    const doorsHere = DOORS.filter((d) => d.floor === 1);
+    // 1) Door markers — small yellow dots sitting just above the floor.
+    for (const door of doorsHere) {
+      const marker = buildDoorMarker(door);
+      group.add(marker);
+    }
+    // 2) Visibility paths between doors (these are the "roads around the blocks").
+    const visEdges = computeVisibilityEdges(doorsHere);
+    for (const [a, b] of visEdges) {
+      const line = buildVisibilityLine(a, b);
+      group.add(line);
+    }
+  }
 }
 
 const SITUM_BLOCK_HEIGHT = 1.6;   // height of each room's 3D block
 const SITUM_BLOCK_LIFT   = 0.05;  // sit just above the floor plane
+
+const ROAD_SLAB_HEIGHT = 0.1;
+const ROAD_SLAB_LIFT   = 0.06;
+
+const DOOR_MARKER_COLOR = 0xf0a92b;   // warm gold — matches the brand accent
+const VIS_LINE_COLOR    = 0xf0a92b;
+const DOOR_RADIUS       = 0.22;       // world units
+const VIS_LINE_HEIGHT   = 0.04;       // sit just above the floor texture
+
+// Small disc at the door position, with a thin glowing rim so it reads
+// against the SVG floor texture.
+function buildDoorMarker(door) {
+  const group = new THREE.Group();
+  const cx = offsetX(door.x);
+  const cz = offsetZ(door.z);
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(DOOR_RADIUS, DOOR_RADIUS, 0.04, 18),
+    new THREE.MeshBasicMaterial({
+      color: DOOR_MARKER_COLOR,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    }),
+  );
+  disc.position.set(cx, VIS_LINE_HEIGHT + 0.02, cz);
+  disc.userData.kind = "door";
+  disc.userData.doorId = door.id;
+  group.add(disc);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(DOOR_RADIUS * 1.1, DOOR_RADIUS * 1.4, 18),
+    new THREE.MeshBasicMaterial({
+      color: DOOR_MARKER_COLOR,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(cx, VIS_LINE_HEIGHT + 0.015, cz);
+  group.add(ring);
+  return group;
+}
+
+// A thin glowing line between two door positions, lying flat on the floor.
+function buildVisibilityLine(a, b) {
+  const ax = offsetX(a.x), az = offsetZ(a.z);
+  const bx = offsetX(b.x), bz = offsetZ(b.z);
+  const len = Math.hypot(bx - ax, bz - az);
+  const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+  const rotY = Math.atan2(bx - ax, bz - az);
+  const line = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.08, len),
+    new THREE.MeshBasicMaterial({
+      color: VIS_LINE_COLOR,
+      transparent: true,
+      opacity: 0.45,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  line.rotation.x = -Math.PI / 2;
+  line.rotation.z = -rotY;
+  line.position.set(mx, VIS_LINE_HEIGHT, mz);
+  line.userData.kind = "vis-edge";
+  return line;
+}
+
+// Visibility edges: every pair of doors NOT sharing a room is checked for
+// straight-line clearance against ROOM bboxes. Doors that share a room
+// always connect (they're both on the same wall). Result is the list of
+// connected door pairs.
+function computeVisibilityEdges(doors) {
+  const roomBoxes = ROOMS
+    .filter((r) => r.floor === 1)
+    .map((r) => ({
+      id: r.id,
+      x1: r.footprint.x,
+      z1: r.footprint.z,
+      x2: r.footprint.x + r.footprint.w,
+      z2: r.footprint.z + r.footprint.d,
+    }));
+
+  const edges = [];
+  for (let i = 0; i < doors.length; i++) {
+    for (let j = i + 1; j < doors.length; j++) {
+      const a = doors[i], b = doors[j];
+      // Always include door pairs that share a room (in-room movement).
+      const sharedRoom = a.rooms.some((r) => b.rooms.includes(r));
+      if (sharedRoom) {
+        edges.push([a, b]);
+        continue;
+      }
+      // Otherwise check clearance against every room bbox EXCEPT the
+      // doors' own host rooms (a door is on its room's wall, so the
+      // line will graze the room).
+      const ownRooms = new Set([...a.rooms, ...b.rooms]);
+      let blocked = false;
+      for (const box of roomBoxes) {
+        if (ownRooms.has(box.id)) continue;
+        if (segmentIntersectsBox(a.x, a.z, b.x, b.z, box)) { blocked = true; break; }
+      }
+      if (!blocked) edges.push([a, b]);
+    }
+  }
+  return edges;
+}
+
+// True if segment (x1,z1)→(x2,z2) crosses the axis-aligned box.
+function segmentIntersectsBox(x1, z1, x2, z2, box) {
+  // Liang–Barsky / slab test, padded inward so segments tangent to the
+  // box (e.g. a door's own wall) don't count as crossings.
+  const pad = 0.05;
+  const bx1 = box.x1 + pad, bx2 = box.x2 - pad;
+  const bz1 = box.z1 + pad, bz2 = box.z2 - pad;
+  const dx = x2 - x1, dz = z2 - z1;
+  let tEnter = 0, tExit = 1;
+  for (const [p, q] of [[-dx, x1 - bx1], [dx, bx2 - x1], [-dz, z1 - bz1], [dz, bz2 - z1]]) {
+    if (p === 0) {
+      if (q < 0) return false;
+    } else {
+      const t = q / p;
+      if (p < 0) {
+        if (t > tExit) return false;
+        if (t > tEnter) tEnter = t;
+      } else {
+        if (t < tEnter) return false;
+        if (t < tExit) tExit = t;
+      }
+    }
+  }
+  return tEnter < tExit;
+}
+
+// Build a road slab from its polygon outline. The polygon comes from the
+// SVG-hatched paving outline (see tools/build-aba-jifar-rooms.js), so the
+// resulting slab follows the actual painted paving instead of a bbox.
+function buildRoadSlab(road) {
+  if (!Array.isArray(road.points) || road.points.length < 3) {
+    // Fallback to bbox box if no polygon — keeps older data working.
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(road.w, ROAD_SLAB_HEIGHT, road.d),
+      new THREE.MeshStandardMaterial({
+        color: road.color ?? 0x4a443c,
+        roughness: 0.95, metalness: 0,
+        transparent: true, opacity: 0.55,
+      }),
+    );
+    slab.position.set(
+      offsetX(road.x + road.w / 2),
+      ROAD_SLAB_LIFT,
+      offsetZ(road.z + road.d / 2),
+    );
+    slab.userData.kind = "road";
+    slab.userData.roadId = road.id;
+    return slab;
+  }
+  const shape = new THREE.Shape();
+  for (let i = 0; i < road.points.length; i++) {
+    const [px, py] = road.points[i];
+    const lx = px - planCenter.x;
+    const lz = py - planCenter.z;
+    if (i === 0) shape.moveTo(lx, lz);
+    else         shape.lineTo(lx, lz);
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: ROAD_SLAB_HEIGHT,
+    bevelEnabled: false,
+  });
+  geo.rotateX(Math.PI / 2);
+  const slab = new THREE.Mesh(
+    geo,
+    new THREE.MeshStandardMaterial({
+      color: road.color ?? 0x4a443c,
+      roughness: 0.95, metalness: 0,
+      transparent: true, opacity: 0.55,
+    }),
+  );
+  slab.position.y = ROAD_SLAB_LIFT + ROAD_SLAB_HEIGHT;
+  slab.receiveShadow = true;
+  slab.userData.kind = "road";
+  slab.userData.roadId = road.id;
+  return slab;
+}
 
 function buildSitumRoomBlock(room) {
   const group = new THREE.Group();
@@ -369,8 +580,11 @@ function buildSitumRoomBlock(room) {
       bevelEnabled: false,
     });
     // Shape was authored in XZ (treating shape's Y as world Z). Rotate
-    // -π/2 around X so the extrusion axis becomes +Y (up).
-    geo.rotateX(-Math.PI / 2);
+    // +π/2 around X so shape Y → world Z and the extrusion runs downward
+    // through the geometry; combined with block.position.y = lift+height
+    // this lands the block in world Y ∈ [lift, lift+height] at the
+    // un-mirrored SVG location.
+    geo.rotateX(Math.PI / 2);
     block = new THREE.Mesh(geo, mat);
     block.position.y = SITUM_BLOCK_LIFT + SITUM_BLOCK_HEIGHT;
   } else {

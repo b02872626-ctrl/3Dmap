@@ -219,50 +219,47 @@ import abaJifarRoomData from "./aba-jifar-rooms.json" with { type: "json" };
 // them as `room.polygon` when assembling ABA_ROOMS below.
 const abaPolygons = new Map(abaJifarRoomData.rooms.map((r) => [r.id, r.points]));
 
-// X coords below are MIRRORED across the map's vertical centre line
-//   new_x = PLAN_MAX_X (71.44) - svg_x*0.06 - world_w
-// so the extruded blocks land on the painted SVG polygons (the SVG
-// renders with its content on the visual left side from our camera's
-// perspective, which is positive-X in world).
 const ABA_ROOMS = [
   // ============ Ground Floor (1) ============
 
-  // Palace block
-  aj("4",  "Aba Jifar II",                             "royal",      56.02, 15.54, 4.32, 5.88, 1),
-  aj("2",  "Geda System",                              "history",    53.20, 15.72, 2.46, 1.56, 1),
-  aj("3",  "State Formation",                          "history",    53.44, 17.46, 2.58, 1.98, 1),
-  aj("1",  "Entrance",                                 "entrance",   53.50, 19.68, 2.70, 1.92, 1, { entrance: true }),
+  // Palace block (mid-west)
+  aj("4",  "Aba Jifar II",                             "royal",      11.10, 15.54, 4.32, 5.88, 1),
+  aj("2",  "Geda System",                              "history",    15.78, 15.72, 2.46, 1.56, 1),
+  aj("3",  "State Formation",                          "history",    15.42, 17.46, 2.58, 1.98, 1),
+  aj("1",  "Entrance",                                 "entrance",   15.24, 19.68, 2.70, 1.92, 1, { entrance: true }),
 
   // Religion pavilion (free-standing, south of palace)
-  aj("5",  "Role of Islam in State Formation",         "religion",   53.74, 24.48, 3.84, 2.94, 1),
+  aj("5",  "Role of Islam in State Formation",         "religion",   13.86, 24.48, 3.84, 2.94, 1),
 
   // Larger building (centre, square plan). Ground floor solid.
-  aj("16", "Aba Jifar II Palace Construction Method", "history",    47.20,  4.74, 2.40, 5.10, 1),
-  aj("18", "Courtyard",                                "ceremonial", 39.10,  4.92, 8.58, 7.62, 1),
-  aj("17", "Wrestling",                                "culture",    42.64,  8.04, 4.08, 3.84, 1),
-  aj("15", "Gibe Kingdom",                             "kingdom",    41.86, 13.44, 7.20, 3.54, 1),
+  aj("16", "Aba Jifar II Palace Construction Method", "history",    21.84,  4.74, 2.40, 5.10, 1),
+  aj("18", "Courtyard",                                "ceremonial", 23.76,  4.92, 8.58, 7.62, 1),
+  aj("17", "Wrestling",                                "culture",    24.72,  8.04, 4.08, 3.84, 1),
+  aj("15", "Gibe Kingdom",                             "kingdom",    22.38, 13.44, 7.20, 3.54, 1),
 
   // Free-standing pavilions
-  aj("19", "Women's Role in the Kingdom",              "womens",     31.48,  4.50, 4.86, 4.02, 1),
-  aj("20", "Banquet Hall",                             "ceremonial",  9.04, 40.80, 8.70, 4.62, 1),
+  aj("19", "Women's Role in the Kingdom",              "womens",     35.10,  4.50, 4.86, 4.02, 1),
+  aj("20", "Banquet Hall",                             "ceremonial", 53.70, 40.80, 8.70, 4.62, 1),
 
   // ============ First Floor (2) ============
 
   // Palace block upstairs
-  aj("8",  "Administration and Diplomacy", "governance", 53.44, 15.60, 6.90, 1.50, 2),
-  aj("7",  "Military and Defense",         "governance", 56.38, 16.98, 3.96, 4.32, 2),
-  aj("6",  "Justice Dispensation",         "governance", 53.50, 17.28, 2.88, 4.08, 2),
+  aj("8",  "Administration and Diplomacy", "governance", 11.10, 15.60, 6.90, 1.50, 2),
+  aj("7",  "Military and Defense",         "governance", 11.10, 16.98, 3.96, 4.32, 2),
+  aj("6",  "Justice Dispensation",         "governance", 15.06, 17.28, 2.88, 4.08, 2),
 
   // Larger building upstairs — U-shape (Industry top, Agriculture left,
-  // Trade right). They overlap at the corners as a continuous brown U.
-  aj("10", "Industry",                     "economy",    38.98,  4.32, 10.08, 2.16, 2),
-  aj("9",  "Agriculture",                  "economy",    48.04,  4.32,  2.10, 7.50, 2),
-  aj("11", "Trade",                        "economy",    38.98,  4.32,  1.98, 8.58, 2),
+  // Trade right). Quadrilaterals that share corners with the top bar;
+  // footprint bboxes match aba-jifar-rooms.json so search/camera framing
+  // land on the actual extruded polygon, not the old bbox synthesis.
+  aj("10", "Industry",                     "economy",    22.39,  4.33, 10.10, 3.04, 2),
+  aj("9",  "Agriculture",                  "economy",    21.29,  4.33,  2.81, 7.47, 2),
+  aj("11", "Trade",                        "economy",    29.75,  5.70,  2.74, 7.19, 2),
 
   // Family rooms — three detached small buildings in the south courtyard
-  aj("14", "Aba Jifar Family Room 3",      "family",     47.14, 13.26, 1.98, 3.06, 2),
-  aj("13", "Aba Jifar Family Room 2",      "family",     43.54, 13.50, 3.66, 3.30, 2),
-  aj("12", "Aba Jifar Family Room 1",      "family",     41.74, 13.98, 1.86, 3.06, 2),
+  aj("14", "Aba Jifar Family Room 3",      "family",     22.32, 13.26, 1.98, 3.06, 2),
+  aj("13", "Aba Jifar Family Room 2",      "family",     24.24, 13.50, 3.66, 3.30, 2),
+  aj("12", "Aba Jifar Family Room 1",      "family",     27.84, 13.98, 1.86, 3.06, 2),
 ];
 
 // Attach polygon vertices (from the SVG) to each room so floors.js can
@@ -275,19 +272,38 @@ for (const r of ABA_ROOMS) {
 // Match the SVG viewBox (1190.65 × 830.28) at scale 0.06.
 const ABA_PLAN_BOUNDS = { minX: 0, maxX: 71.44, minZ: 0, maxZ: 49.82 };
 
-// Roads / paved courts. These will be replaced with SVG-extracted paths
-// once we identify the path classes for the hatched road areas; for now
-// they're roughly placed based on the SVG layout.
-const ABA_ROADS = [
-  // South plaza — wide paved court along the bottom of the site
-  { x: 0,    z: 41,  w: 54,   d: 3,    color: 0x4a443c, label: "South plaza" },
-  // Connector between palace block and larger building
-  { x: 8.6,  z: 11,  w: 4.5,  d: 4,    color: 0x4a443c, label: "Central path" },
-  // Approach to the larger building (north court)
-  { x: 11.5, z: 8.5, w: 12,   d: 1,    color: 0x4a443c, label: "North court" },
-  // Path leading from larger building area to the Banquet Hall
-  { x: 25,   z: 35,  w: 19,   d: 4,    color: 0x4a443c, label: "Banquet path" },
-];
+// Roads / paved courts — extracted from the ground SVG's hatching by
+// tools/build-aba-jifar-rooms.js (bottom-band clusters only). Format
+// matches what floors.js + pathfinding.js consume:
+//   { id, x, z, w, d, color, label }
+// label is human-friendly for direction steps.
+const ABA_ROAD_LABELS = {
+  "road-1": "South plaza",
+  "road-2": "Banquet path",
+  "road-3": "Central path",
+  "road-4": "East approach",
+  "road-5": "East gate",
+};
+const ABA_ROADS = abaJifarRoomData.roads.map((r) => ({
+  id:     r.id,
+  x:      r.bbox[0],
+  z:      r.bbox[1],
+  w:      r.bbox[2],
+  d:      r.bbox[3],
+  points: r.points,
+  color:  0x4a443c,
+  label:  ABA_ROAD_LABELS[r.id] ?? r.id,
+}));
+
+// Doors extracted from the SVG's door-swing arcs (see build script).
+// Each door has a world position and a list of attached room ids (1-2).
+const ABA_DOORS = (abaJifarRoomData.doors || []).map((d) => ({
+  id:    d.id,
+  x:     d.pos[0],
+  z:     d.pos[1],
+  floor: 1,
+  rooms: d.rooms,
+}));
 
 // =============================================================
 //  Building registry + active-building selector
@@ -316,7 +332,8 @@ const BUILDING_LIST = [
     floors:     ABA_FLOORS,
     rooms:      ABA_ROOMS,
     planBounds: ABA_PLAN_BOUNDS,
-    roads:      [],                  // SVG already includes the paving
+    roads:      [],                  // road slabs replaced by visibility paths between doors
+    doors:      ABA_DOORS,           // door positions extracted from SVG arc symbols
   },
 ];
 
@@ -336,6 +353,7 @@ export const FLOORS      = ACTIVE.floors;
 export const ROOMS       = ACTIVE.rooms;
 export const PLAN_BOUNDS = ACTIVE.planBounds;
 export const ROADS       = ACTIVE.roads ?? [];
+export const DOORS       = ACTIVE.doors ?? [];
 
 // New: lets the UI render the building selector and current branding.
 export const BUILDINGS         = BUILDING_LIST;
