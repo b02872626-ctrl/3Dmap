@@ -228,6 +228,52 @@ export function buildFloors() {
   return { root, floorGroups, roomGroups, occluders };
 }
 
+// Rasterise an SVG file to a canvas with a white background, then
+// copy that canvas into the supplied THREE.Texture. Doing this through
+// fetch+Blob+Image+Canvas (instead of <img src="file.svg">) gives us
+// a guaranteed-opaque bitmap at a controlled resolution.
+function loadSvgAsCanvasTexture(url, texture) {
+  fetch(url)
+    .then((r) => {
+      if (!r.ok) throw new Error("HTTP " + r.status + " loading " + url);
+      return r.text();
+    })
+    .then((svgText) => {
+      // Pull the viewBox to compute the aspect ratio.
+      const vb = svgText.match(/viewBox="\s*([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s+([\d.\-]+)\s*"/);
+      const vbW = vb ? parseFloat(vb[3]) : 1190;
+      const vbH = vb ? parseFloat(vb[4]) : 830;
+      const aspect = vbW / vbH;
+
+      // Use a generous bitmap size so the SVG stays crisp when zoomed.
+      const W = 2048;
+      const H = Math.round(W / aspect);
+
+      const blobUrl = URL.createObjectURL(
+        new Blob([svgText], { type: "image/svg+xml" }),
+      );
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#f0ece0";   // warm off-white background
+        ctx.fillRect(0, 0, W, H);
+        ctx.drawImage(img, 0, 0, W, H);
+        texture.image = canvas;
+        texture.needsUpdate = true;
+        URL.revokeObjectURL(blobUrl);
+      };
+      img.onerror = (e) => {
+        console.error("SVG image load failed:", url, e);
+        URL.revokeObjectURL(blobUrl);
+      };
+      img.src = blobUrl;
+    })
+    .catch((err) => console.error("Failed to fetch SVG:", url, err));
+}
+
 // =============================================================
 //  Situm-style floor: SVG texture plane + extruded room blocks
 // =============================================================
@@ -236,33 +282,29 @@ function buildSitumFloor(group, floor, roomGroups) {
   const planW = PLAN_BOUNDS.maxX - PLAN_BOUNDS.minX;
   const planD = PLAN_BOUNDS.maxZ - PLAN_BOUNDS.minZ;
 
-  // Load the SVG as an HTMLImage → CanvasTexture so it works for any
-  // SVG without needing a separate loader.
-  const img = new Image();
-  const tex = new THREE.Texture(img);
+  // Create a placeholder texture; we'll fill it in once the SVG is
+  // fetched, rasterised to a canvas with a white background, and
+  // copied onto the texture. Rendering an SVG through <img> directly
+  // can run into alpha / sizing issues — canvas gives us a clean
+  // fully-opaque bitmap regardless of how the SVG declares its size.
+  const tex = new THREE.Texture();
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.anisotropy = 8;
-  img.crossOrigin = "anonymous";
-  img.onload = () => { tex.needsUpdate = true; };
-  img.src = floor.mapTexture;
+  loadSvgAsCanvasTexture(floor.mapTexture, tex);
 
   const floorMat = new THREE.MeshStandardMaterial({
     map: tex,
     color: 0xffffff,
     roughness: 0.95,
     metalness: 0,
-    transparent: true,    // some SVGs include transparency
-    depthWrite: true,
   });
   const floorPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(planW, planD),
     floorMat,
   );
   floorPlane.rotation.x = -Math.PI / 2;
-  // Plane is centred at floor-local (0, 0, 0). The room build offsets
-  // already use planCenter to translate plan→local, so this lines up.
   floorPlane.position.set(0, 0, 0);
   floorPlane.receiveShadow = true;
   group.add(floorPlane);
