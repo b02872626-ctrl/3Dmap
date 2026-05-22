@@ -434,73 +434,45 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".search")) searchResults.classList.remove("open");
 });
 
-// ---------------- Building selector (top-left dropdown) ----------------
-(function setupBuildingSelector() {
-  const trigger = document.getElementById("building-trigger");
-  const menu    = document.getElementById("building-menu");
-  if (!trigger || !menu) return;
+// ---------------- Building tabs (top bar) ----------------
+(function setupBuildingTabs() {
+  const tabsEl = document.getElementById("building-tabs");
+  if (!tabsEl) return;
 
-  // Brand text reflects the active building
-  document.getElementById("brand-name").textContent = ACTIVE_BUILDING.name;
-  document.getElementById("brand-sub").textContent  = ACTIVE_BUILDING.subtitle;
-  document.getElementById("brand-mark").textContent = ACTIVE_BUILDING.icon ?? "✻";
   document.title = `${ACTIVE_BUILDING.name} — 3D Map`;
 
-  // Render the dropdown items
-  menu.innerHTML = "";
+  tabsEl.innerHTML = "";
   for (const b of BUILDINGS) {
-    const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
+    btn.className = "building-tab";
+    btn.role = "tab";
     btn.dataset.buildingId = b.id;
-    if (b.id === ACTIVE_BUILDING.id) btn.classList.add("active");
+    if (b.id === ACTIVE_BUILDING.id) {
+      btn.classList.add("active");
+      btn.setAttribute("aria-selected", "true");
+    } else {
+      btn.setAttribute("aria-selected", "false");
+    }
+    if (b.accent) btn.style.setProperty("--tab-accent", b.accent);
     btn.innerHTML = `
-      <span class="b-mark" style="color:${b.accent ?? "currentColor"}">${b.icon ?? "✻"}</span>
-      <span class="b-text">
-        <span class="b-name">${b.name}</span>
-        <span class="b-sub">${b.subtitle}</span>
+      <span class="tab-mark">${b.icon ?? "✻"}</span>
+      <span class="tab-text">
+        <span class="tab-name">${b.name}</span>
+        <span class="tab-sub">${b.subtitle}</span>
       </span>
-      <svg class="b-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-        <path fill="currentColor" d="M9 16.2l-3.5-3.6L4 14l5 5 11-11-1.5-1.4z"/>
-      </svg>
     `;
+    btn.title = `${b.name} — ${b.subtitle}`;
     btn.addEventListener("click", () => {
-      if (b.id === ACTIVE_BUILDING.id) {
-        closeMenu();
-        return;
-      }
-      // Switch by setting the URL param — the page reloads and data.js
-      // picks up the new building on next module evaluation.
+      if (b.id === ACTIVE_BUILDING.id) return;
+      // Switch by URL param — page reload picks up the new building data.
       const url = new URL(window.location.href);
       if (b.id === BUILDINGS[0].id) url.searchParams.delete("building");
       else url.searchParams.set("building", b.id);
       window.location.href = url.toString();
     });
-    li.appendChild(btn);
-    menu.appendChild(li);
+    tabsEl.appendChild(btn);
   }
-
-  function openMenu() {
-    menu.hidden = false;
-    requestAnimationFrame(() => menu.classList.add("visible"));
-    trigger.setAttribute("aria-expanded", "true");
-  }
-  function closeMenu() {
-    menu.classList.remove("visible");
-    trigger.setAttribute("aria-expanded", "false");
-    setTimeout(() => { menu.hidden = true; }, 200);
-  }
-  trigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (trigger.getAttribute("aria-expanded") === "true") closeMenu();
-    else openMenu();
-  });
-  document.addEventListener("click", (e) => {
-    if (!menu.contains(e.target) && e.target !== trigger) closeMenu();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMenu();
-  });
 })();
 
 // Hide floor switcher buttons that don't apply to the active building
