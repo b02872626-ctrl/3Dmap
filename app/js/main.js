@@ -610,6 +610,8 @@ function restoreCameraView() {
   camera.position.copy(controls.target).add(_viewOffset);
   camera.updateProjectionMatrix();
   controls.update();
+  // Same fix as frameInitialView — cancel any leftover lerp.
+  cameraLerp = null;
   return true;
 }
 // Debounced save on any camera change.
@@ -658,6 +660,10 @@ function frameInitialView(animate = false) {
     camera.zoom = zoom;
     camera.updateProjectionMatrix();
     controls.update();
+    // Cancel any vertical-recenter lerp left over from applyFloorLayout —
+    // otherwise it drags the target back to world origin and the cluster
+    // ends up off-center.
+    cameraLerp = null;
   }
 }
 
