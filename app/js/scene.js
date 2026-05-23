@@ -83,14 +83,17 @@ export function createScene(canvas) {
   };
 
   // ---------------- Lighting ----------------
-  const ambient = new THREE.AmbientLight(0xf5efe2, 0.55);
+  // Slightly warmer ambient + hemi keep the cream walls from going flat
+  // in shadow. The sun gets ~2× the previous intensity so the new roofs
+  // throw a clear directional shadow across the platforms.
+  const ambient = new THREE.AmbientLight(0xf5efe2, 0.50);
   scene.add(ambient);
 
-  const hemi = new THREE.HemisphereLight(0xfff3dc, 0x2a2f38, 0.95);
+  const hemi = new THREE.HemisphereLight(0xfff3dc, 0x2a2f38, 0.85);
   hemi.position.set(0, 30, 0);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xffe9c8, 0.35);
+  const sun = new THREE.DirectionalLight(0xffe9c8, 0.75);
   sun.position.set(40, 80, -30);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -102,7 +105,7 @@ export function createScene(canvas) {
   sun.shadow.camera.far = 240;
   sun.shadow.bias       = -0.0002;
   sun.shadow.normalBias = 0.35;
-  sun.shadow.radius     = 6;
+  sun.shadow.radius     = 8;
   sun.target.position.set(0, 0, 0);
   scene.add(sun);
   scene.add(sun.target);

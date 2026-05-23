@@ -338,8 +338,19 @@ function buildSitumFloor(group, floor, roomGroups) {
   const roomsHere = ROOMS.filter((r) => r.floor === floor.id);
   const sharedEdges = computeSharedEdges(roomsHere);
   const floor1WithFloor2 = computeFloor1RoomsWithFloor2Above();
+  // Map room.id → list of doors that touch it, so each room can stamp
+  // a dark door panel on the wall edge closest to its door positions.
+  const doorsByRoom = new Map();
+  for (const d of (DOORS || [])) {
+    for (const rid of (d.rooms || [])) {
+      if (!doorsByRoom.has(rid)) doorsByRoom.set(rid, []);
+      doorsByRoom.get(rid).push(d);
+    }
+  }
   for (const room of roomsHere) {
-    const rg = buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2);
+    const rg = buildSitumRoomBlock(
+      room, sharedEdges, floor1WithFloor2, doorsByRoom.get(room.id) || [],
+    );
     group.add(rg);
     roomGroups.push(rg);
   }
@@ -740,12 +751,18 @@ function addOutdoorTerrain(group) {
   }
 }
 
-// ------- Trees: hand-placed in open grass, away from buildings/paths -------
+// ------- Trees / shrubs / rocks: hand-placed in open grass -------
 const treeTrunkMat = new THREE.MeshStandardMaterial({
   color: 0x5a3a20, roughness: 0.95, metalness: 0, flatShading: true,
 });
 const treeFoliageMat = new THREE.MeshStandardMaterial({
   color: 0x466e3a, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const shrubMat = new THREE.MeshStandardMaterial({
+  color: 0x537a3d, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const rockMat = new THREE.MeshStandardMaterial({
+  color: 0x9aa088, roughness: 0.90, metalness: 0, flatShading: true,
 });
 
 function buildTree(x, y, z, scale = 1) {
@@ -771,31 +788,87 @@ function buildTree(x, y, z, scale = 1) {
   return g;
 }
 
-// Hand-picked tree positions in LOCAL plan-centered coords. The
+function buildShrub(x, y, z, scale = 1) {
+  const g = new THREE.Group();
+  const r = 0.30 * scale;
+  // Three overlapping icosahedron blobs read as a low-poly bush.
+  const blobs = [
+    [ 0.00, 0.55,  0.00],
+    [ 0.40, 0.42, -0.10],
+    [-0.30, 0.45,  0.25],
+  ];
+  for (const [dx, dy, dz] of blobs) {
+    const m = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(r, 0),
+      shrubMat,
+    );
+    m.position.set(x + dx * scale, y + dy * scale, z + dz * scale);
+    m.castShadow = true;
+    g.add(m);
+  }
+  return g;
+}
+
+function buildRock(x, y, z, scale = 1) {
+  const r = 0.30 * scale;
+  const m = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(r, 0),
+    rockMat,
+  );
+  m.position.set(x, y + r * 0.45, z);
+  m.scale.set(1.1, 0.55, 1.3);
+  m.rotation.y = (x + z) * 0.7;
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
+// Hand-picked decoration positions in LOCAL plan-centered coords. The
 // building bbox in local coords runs roughly x:[-25, +5], z:[-21, +3],
-// so every tree below sits well outside that envelope. Edit / trim
-// freely — the trees are purely decorative and never participate in
-// pathfinding or picking.
+// so every entry below sits well outside that envelope. Trim freely —
+// none of this participates in pathfinding or picking.
 function addLandscapeDecor(root) {
-  const positions = [
-    // East-side landscape
-    [ 14, 0, -10, 1.0],
-    [ 17, 0,  -2, 1.1],
-    [ 12, 0,   8, 0.9],
-    [ 20, 0,   4, 1.0],
-    // South perimeter
-    [ -2, 0,  14, 1.0],
+  // Trees — taller silhouettes, sparser
+  const TREES = [
+    [ 14, 0, -10, 1.00],
+    [ 17, 0,  -2, 1.10],
+    [ 12, 0,   8, 0.90],
+    [ 20, 0,   4, 1.00],
+    [ -2, 0,  14, 1.00],
     [  6, 0,  17, 0.95],
     [-12, 0,  13, 1.05],
-    // Northwest perimeter
-    [-30, 0, -18, 0.9],
-    [-28, 0,  -2, 1.0],
-    // Far southwest
+    [-30, 0, -18, 0.90],
+    [-28, 0,  -2, 1.00],
     [-22, 0,  16, 0.95],
   ];
-  for (const [x, y, z, s] of positions) {
-    root.add(buildTree(x, y, z, s));
-  }
+  for (const [x, y, z, s] of TREES) root.add(buildTree(x, y, z, s));
+
+  // Shrubs — short ground vegetation, scattered around the trees
+  const SHRUBS = [
+    [ 10, 0,  -6, 0.95],
+    [ 15, 0,   3, 0.85],
+    [ 16, 0,  10, 0.90],
+    [  3, 0,  12, 1.00],
+    [ -8, 0,  16, 0.95],
+    [-18, 0,  10, 0.90],
+    [-26, 0,  -8, 0.95],
+    [-26, 0,  10, 0.90],
+    [ -6, 0, -24, 0.85],
+    [ 22, 0,  -4, 1.00],
+  ];
+  for (const [x, y, z, s] of SHRUBS) root.add(buildShrub(x, y, z, s));
+
+  // Rocks — low irregular stones for ground texture
+  const ROCKS = [
+    [ 13, 0,  -5, 1.10],
+    [ 19, 0,   1, 0.90],
+    [  1, 0,  16, 1.00],
+    [-15, 0,  15, 1.05],
+    [-29, 0,  -6, 0.95],
+    [-23, 0, -23, 1.00],
+    [  9, 0,  20, 0.85],
+  ];
+  for (const [x, y, z, s] of ROCKS) root.add(buildRock(x, y, z, s));
 }
 
 function buildBuildingPlatform(room) {
@@ -844,7 +917,7 @@ const lpDoorMat = new THREE.MeshStandardMaterial({
   flatShading: true, side: THREE.DoubleSide,
 });
 
-function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
+function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom = []) {
   const group = new THREE.Group();
   const cat = CATEGORIES[room.category] || CATEGORIES.amenity;
   const baseColor = new THREE.Color(cat.color);
@@ -897,7 +970,24 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
     if (roof) {
       roof.castShadow = true;
       group.add(roof);
+      // Dark trim line along the eave + hip ridges (EdgesGeometry picks
+      // up every triangle seam, which on a triangle-fan hip roof = the
+      // perimeter + the ridges to the apex).
+      const ridges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(roof.geometry, 12),
+        new THREE.LineBasicMaterial({
+          color: 0x5a1f10, transparent: true, opacity: 0.7,
+        }),
+      );
+      ridges.position.copy(roof.position);
+      group.add(ridges);
     }
+  }
+
+  // --- Windows on external walls + dark door panels at door positions ---
+  buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges);
+  if (room.floor === 1 && doorsForRoom.length) {
+    buildLowPolyDoors(group, polygonLocal, wallsBaseY, doorsForRoom);
   }
 
   // --- Silhouette outline on the walls ---
@@ -1194,6 +1284,83 @@ function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, 
       const wz = az + uz * t + nz * 0.04;
       group.add(buildWindowPanel(wx, windowY, wz, wallAngle));
     }
+  }
+}
+
+// Stamp a dark door panel onto whichever wall edge of the polygon is
+// closest to each door's (x,z) world position. The door is a thin
+// plane offset slightly outward from the wall plane, with a small
+// lintel strip across the top. Walls themselves remain solid (no
+// cut-out), which keeps the low-poly look simple.
+function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
+  if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
+  const doorY = wallsBaseY + LP_DOOR_H / 2;
+
+  let cx = 0, cz = 0;
+  for (const [lx, lz] of polygonLocal) { cx += lx; cz += lz; }
+  cx /= polygonLocal.length;
+  cz /= polygonLocal.length;
+
+  for (const door of doors) {
+    const wx = offsetX(door.x);
+    const wz = offsetZ(door.z);
+
+    // Find the closest polygon edge to this door's world position.
+    let bestI = -1, bestDist = Infinity, bestT = 0;
+    for (let i = 0; i < polygonLocal.length; i++) {
+      const [ax, az] = polygonLocal[i];
+      const [bx, bz] = polygonLocal[(i + 1) % polygonLocal.length];
+      const ex = bx - ax, ez = bz - az;
+      const len2 = ex * ex + ez * ez;
+      if (len2 < 0.001) continue;
+      const t = Math.max(0, Math.min(1, ((wx - ax) * ex + (wz - az) * ez) / len2));
+      const px = ax + ex * t, pz = az + ez * t;
+      const d = Math.hypot(wx - px, wz - pz);
+      if (d < bestDist) { bestDist = d; bestI = i; bestT = t; }
+    }
+    if (bestI < 0) continue;
+    // Skip doors whose nearest wall is far — they belong to another room.
+    if (bestDist > 1.5) continue;
+
+    const [ax, az] = polygonLocal[bestI];
+    const [bx, bz] = polygonLocal[(bestI + 1) % polygonLocal.length];
+    const ex = bx - ax, ez = bz - az;
+    const edgeLen = Math.hypot(ex, ez);
+    if (edgeLen < 0.001) continue;
+    const ux = ex / edgeLen, uz = ez / edgeLen;
+
+    // Outward normal — from edge midpoint, pointing away from centroid.
+    const midX = (ax + bx) / 2, midZ = (az + bz) / 2;
+    let nx = midX - cx, nz = midZ - cz;
+    const nLen = Math.hypot(nx, nz) || 1;
+    nx /= nLen; nz /= nLen;
+    const wallAngle = Math.atan2(nx, nz);
+
+    // Position the door panel on the wall (small outward offset so the
+    // plane sits in front of the wall surface, not z-fighting with it).
+    const px = ax + ux * (bestT * edgeLen) + nx * 0.05;
+    const pz = az + uz * (bestT * edgeLen) + nz * 0.05;
+
+    const doorMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(LP_DOOR_W, LP_DOOR_H),
+      lpDoorMat,
+    );
+    doorMesh.position.set(px, doorY, pz);
+    doorMesh.rotation.y = wallAngle;
+    group.add(doorMesh);
+
+    // Small lintel across the top — a 7 cm dark wood band.
+    const lintel = new THREE.Mesh(
+      new THREE.PlaneGeometry(LP_DOOR_W + 0.10, 0.07),
+      lpWindowFrameMat,
+    );
+    lintel.position.set(
+      px,
+      doorY + LP_DOOR_H / 2 + 0.04,
+      pz,
+    );
+    lintel.rotation.y = wallAngle;
+    group.add(lintel);
   }
 }
 
