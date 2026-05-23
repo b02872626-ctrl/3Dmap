@@ -648,8 +648,8 @@ function frameInitialView(animate = false) {
   const floorY = floorGroup ? floorGroup.position.y : 0;
 
   const targetVec = new THREE.Vector3(cx, floorY + 3, cz);
-  // We want the cluster (span wide) to fill ~80% of the visible frustum
-  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 1.4), 0.6, 2.0);
+  // Tight default: cluster fills most of the visible frustum
+  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 0.95), 0.85, 2.5);
   if (animate) {
     flyTo(targetVec, zoom, 55);
   } else {
