@@ -990,6 +990,12 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
     buildLowPolyDoors(group, polygonLocal, wallsBaseY, doorsForRoom);
   }
 
+  // --- Facade details: veranda, columns, railings, roof trim ---
+  addBuildingFacadeDetails(group, {
+    room, polygonLocal, wallsBaseY, wallHeight,
+    sharedEdges, doorsForRoom, isRoofed: isStandaloneRoofed,
+  });
+
   // --- Silhouette outline on the walls ---
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(walls.geometry, 1),
@@ -1383,6 +1389,227 @@ function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
     );
     lintel.rotation.y = wallAngle;
     group.add(lintel);
+  }
+}
+
+// ============================================================
+//  BuildingFacadeDetails
+//  ----------------------------------------------------------
+//  Pure decoration layer added on top of every room. Reads the
+//  existing polygon + wall height, never modifies them. Adds:
+//    · A thin veranda / balcony strip extending outward from each
+//      eligible external edge.
+//    · Dark wooden columns at regular intervals along ground-floor
+//      veranda edges (skipped near doors). Drawn as a single
+//      InstancedMesh per room so 200+ columns cost one draw call.
+//    · Dark thin railings (top rail, bottom rail, balusters) on
+//      upper-floor balcony edges.
+//    · A wooden trim band running just below the roof eave.
+//    · A soft transparent contact-shadow plane under each veranda.
+//
+//  Knobs (top of section):
+//    FACADE_DETAILS        — master on/off
+//    FACADE_VERANDA_WIDTH  — outward depth of veranda strip
+//    FACADE_COLUMN_SPACING — gap between adjacent columns
+//    FACADE_RAILING_HIDDEN — set true to skip the balcony railings
+//    FACADE_MIN_EDGE_LEN   — edges shorter than this get no veranda
+//    FACADE_DOOR_CLEARANCE — column-position skip radius around doors
+// ============================================================
+const FACADE_DETAILS         = true;
+const FACADE_RAILING_HIDDEN  = false;
+const FACADE_VERANDA_WIDTH   = 0.40;
+const FACADE_VERANDA_H       = 0.05;
+const FACADE_COLUMN_SPACING  = 1.80;
+const FACADE_COLUMN_RADIUS   = 0.085;
+const FACADE_COLUMN_HEIGHT   = LP_WALL_HEIGHT_T;        // foundation top → wall top
+const FACADE_RAILING_H       = 0.60;
+const FACADE_RAILING_THICK   = 0.045;
+const FACADE_BALUSTER_GAP    = 0.35;
+const FACADE_TRIM_H          = 0.09;
+const FACADE_TRIM_PROJ       = 0.08;
+const FACADE_MIN_EDGE_LEN    = 3.5;
+const FACADE_DOOR_CLEARANCE  = 0.70;
+
+const facadeVerandaMat = new THREE.MeshStandardMaterial({
+  color: 0xc7b88f, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const facadeColumnMat = new THREE.MeshStandardMaterial({
+  color: 0x3d2210, roughness: 0.85, metalness: 0, flatShading: true,
+});
+const facadeRailingMat = new THREE.MeshStandardMaterial({
+  color: 0x3d2210, roughness: 0.85, metalness: 0, flatShading: true,
+});
+const facadeTrimMat = new THREE.MeshStandardMaterial({
+  color: 0x4a3220, roughness: 0.90, metalness: 0, flatShading: true,
+});
+const facadeContactMat = new THREE.MeshBasicMaterial({
+  color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false,
+});
+
+// Shared geometries — InstancedMesh reuses these across rooms.
+const facadeColumnGeo = new THREE.CylinderGeometry(
+  FACADE_COLUMN_RADIUS, FACADE_COLUMN_RADIUS,
+  FACADE_COLUMN_HEIGHT, 6,
+);
+
+function addBuildingFacadeDetails(group, opts) {
+  if (!FACADE_DETAILS) return;
+  const { room, polygonLocal, wallsBaseY, wallHeight, sharedEdges,
+          doorsForRoom = [], isRoofed } = opts;
+  if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
+
+  const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
+  const wallTopY = wallsBaseY + wallHeight;
+  const isFloor1 = room.floor === 1;
+
+  // Door positions in local plan-centered coords — used to skip column
+  // placements that would block a doorway.
+  const doorPositions = doorsForRoom.map((d) => [offsetX(d.x), offsetZ(d.z)]);
+
+  const tmpMat = new THREE.Matrix4();
+  const columnMatrices = [];
+
+  for (let i = 0; i < polygonLocal.length; i++) {
+    const [ax, az] = polygonLocal[i];
+    const [bx, bz] = polygonLocal[(i + 1) % polygonLocal.length];
+    const ex = bx - ax, ez = bz - az;
+    const edgeLen = Math.hypot(ex, ez);
+    if (edgeLen < FACADE_MIN_EDGE_LEN) continue;
+    // Skip internal walls shared with another room.
+    if (sharedEdges && Array.isArray(room.polygon) &&
+        sharedEdges.has(edgeKey(
+          room.polygon[i],
+          room.polygon[(i + 1) % room.polygon.length],
+        ))) continue;
+
+    const ux = ex / edgeLen, uz = ez / edgeLen;
+    const nx = (ez / edgeLen) * areaSign;
+    const nz = (-ex / edgeLen) * areaSign;
+    const edgeYaw = Math.atan2(ux, uz);
+
+    // Centre of veranda strip — sits along the wall with FACADE_VERANDA_WIDTH
+    // pushed outward from the wall plane.
+    const verandaCx = ax + ex / 2 + nx * (FACADE_VERANDA_WIDTH / 2);
+    const verandaCz = az + ez / 2 + nz * (FACADE_VERANDA_WIDTH / 2);
+
+    // --- Veranda strip ---
+    const veranda = new THREE.Mesh(
+      new THREE.BoxGeometry(edgeLen, FACADE_VERANDA_H, FACADE_VERANDA_WIDTH),
+      facadeVerandaMat,
+    );
+    veranda.position.set(verandaCx, wallsBaseY + FACADE_VERANDA_H / 2, verandaCz);
+    veranda.rotation.y = edgeYaw;
+    veranda.castShadow = true;
+    veranda.receiveShadow = true;
+    group.add(veranda);
+
+    // --- Contact shadow under veranda ---
+    const contact = new THREE.Mesh(
+      new THREE.PlaneGeometry(edgeLen + 0.25, FACADE_VERANDA_WIDTH + 0.25),
+      facadeContactMat,
+    );
+    contact.rotation.x = -Math.PI / 2;
+    contact.rotation.z = -edgeYaw;
+    contact.position.set(verandaCx, wallsBaseY - 0.001, verandaCz);
+    group.add(contact);
+
+    // --- Wooden trim band under the roof eave (roofed rooms only) ---
+    if (isRoofed) {
+      const trim = new THREE.Mesh(
+        new THREE.BoxGeometry(edgeLen, FACADE_TRIM_H, FACADE_TRIM_PROJ),
+        facadeTrimMat,
+      );
+      const trimCx = ax + ex / 2 + nx * (FACADE_TRIM_PROJ / 2);
+      const trimCz = az + ez / 2 + nz * (FACADE_TRIM_PROJ / 2);
+      trim.position.set(trimCx, wallTopY - FACADE_TRIM_H / 2, trimCz);
+      trim.rotation.y = edgeYaw;
+      trim.castShadow = true;
+      group.add(trim);
+    }
+
+    // --- Ground-floor columns under the veranda's outer edge ---
+    if (isFloor1) {
+      // Distribute columns at FACADE_COLUMN_SPACING with both ends pinned.
+      const count = Math.max(2, Math.round(edgeLen / FACADE_COLUMN_SPACING) + 1);
+      const colOutset = FACADE_VERANDA_WIDTH - FACADE_COLUMN_RADIUS - 0.02;
+      for (let j = 0; j < count; j++) {
+        const t = j / (count - 1);
+        const px = ax + ex * t + nx * colOutset;
+        const pz = az + ez * t + nz * colOutset;
+        // Skip column if it would block a doorway.
+        let blocked = false;
+        for (const [dx, dz] of doorPositions) {
+          if (Math.hypot(dx - px, dz - pz) < FACADE_DOOR_CLEARANCE) {
+            blocked = true; break;
+          }
+        }
+        if (blocked) continue;
+        tmpMat.makeTranslation(
+          px,
+          wallsBaseY + FACADE_COLUMN_HEIGHT / 2,
+          pz,
+        );
+        columnMatrices.push(tmpMat.clone());
+      }
+    }
+
+    // --- Upper-floor balcony railings ---
+    if (!isFloor1 && !FACADE_RAILING_HIDDEN) {
+      const railOutset = FACADE_VERANDA_WIDTH - 0.04;
+      const railCx = ax + ex / 2 + nx * railOutset;
+      const railCz = az + ez / 2 + nz * railOutset;
+
+      // Top rail
+      const top = new THREE.Mesh(
+        new THREE.BoxGeometry(edgeLen, FACADE_RAILING_THICK, FACADE_RAILING_THICK),
+        facadeRailingMat,
+      );
+      top.position.set(railCx, wallsBaseY + FACADE_RAILING_H, railCz);
+      top.rotation.y = edgeYaw;
+      top.castShadow = true;
+      group.add(top);
+
+      // Bottom rail
+      const bot = new THREE.Mesh(
+        new THREE.BoxGeometry(edgeLen, FACADE_RAILING_THICK, FACADE_RAILING_THICK),
+        facadeRailingMat,
+      );
+      bot.position.set(railCx, wallsBaseY + 0.12, railCz);
+      bot.rotation.y = edgeYaw;
+      bot.castShadow = true;
+      group.add(bot);
+
+      // Balusters (vertical pickets) between the two rails
+      const baluCount = Math.max(2, Math.round(edgeLen / FACADE_BALUSTER_GAP));
+      const baluH = FACADE_RAILING_H - 0.12;
+      const baluThick = FACADE_RAILING_THICK * 0.6;
+      for (let j = 0; j <= baluCount; j++) {
+        const t = j / baluCount;
+        const bxL = ax + ex * t + nx * railOutset;
+        const bzL = az + ez * t + nz * railOutset;
+        const balu = new THREE.Mesh(
+          new THREE.BoxGeometry(baluThick, baluH, baluThick),
+          facadeRailingMat,
+        );
+        balu.position.set(bxL, wallsBaseY + 0.12 + baluH / 2, bzL);
+        balu.rotation.y = edgeYaw;
+        group.add(balu);
+      }
+    }
+  }
+
+  // --- Emit columns as a single InstancedMesh per room ---
+  if (columnMatrices.length > 0) {
+    const inst = new THREE.InstancedMesh(
+      facadeColumnGeo, facadeColumnMat, columnMatrices.length,
+    );
+    for (let k = 0; k < columnMatrices.length; k++) {
+      inst.setMatrixAt(k, columnMatrices[k]);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    inst.castShadow = true;
+    inst.receiveShadow = true;
+    group.add(inst);
   }
 }
 
