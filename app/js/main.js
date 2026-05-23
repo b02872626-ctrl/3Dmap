@@ -40,10 +40,12 @@ const graph = buildGraph();
 const routeLayer = createRouteLayer(scene, floorGroups);
 
 // ---------------- Floor visibility / explode ----------------
-// Base stack — equal to SITUM_BLOCK_HEIGHT (1.6) so floor 2's wall
-// bottom lines up exactly with floor 1's wall top, making the buildings
-// read as continuous two-storey structures.
-const FLOOR_GAP = 1.6;
+// Stack height — floor-1 walls are LP_WALL_HEIGHT_S (0.55) above a
+// LP_FOUNDATION_H (0.16) plinth on a SITUM_BLOCK_LIFT (0.05) lift, so
+// the top of floor-1 walls sits at world Y = 0.76. We want floor-2's
+// foundation bottom (which is at SITUM_BLOCK_LIFT inside its own group)
+// to land on that 0.76 line. FLOOR_GAP = 0.76 - 0.05 = 0.71.
+const FLOOR_GAP = 0.71;
 const EXPLODE_GAP = 7;   // exploded stack — pull floors apart for clarity
 
 let activeFloor = 1; // default view: ground floor

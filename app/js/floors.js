@@ -796,12 +796,13 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
     polygonLocal = [[x1, z1], [x2, z1], [x2, z2], [x1, z2]];
   }
 
-  // Every floor-1 room now uses the same short open-top walls — both
-  // those with a floor-2 room on top and the standalone ones (Religion
-  // pavilion, Women's Role, etc.). No roofs on the ground floor.
+  // Every floor-1 room uses short open-top walls (no roof on ground
+  // floor). Floor-2 rooms get tall closed walls + a hip roof on top —
+  // they sit on the ground-floor walls and read as a proper second
+  // storey with its own pitched roof.
   const isFloor1 = room.floor === 1;
-  const hasFloor2Above = isFloor1; // treat every floor-1 room as open-top
-  const isStandaloneRoofed = false;
+  const hasFloor2Above = isFloor1; // every floor-1 room is open-top
+  const isStandaloneRoofed = !isFloor1;
 
   // --- Foundation plinth (slight step at the base) ---
   const foundationPoly = offsetPolygonOutward(polygonLocal, LP_FOUNDATION_OUT);
@@ -844,9 +845,7 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
     walls.receiveShadow = true;
     group.add(walls);
 
-    // Hip roof on top — only for floor-1 standalones (floor 2 rooms
-    // are upper-floor blocks rendered without a roof; if you want
-    // roofs on the upstairs blocks too, switch this guard.)
+    // Hip roof on top — floor-2 rooms each get their own roof.
     if (isStandaloneRoofed) {
       const roofPoly = LP_ROOF_OVERHANG > 0
         ? offsetPolygonOutward(polygonLocal, LP_ROOF_OVERHANG)
