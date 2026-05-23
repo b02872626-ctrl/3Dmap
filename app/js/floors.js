@@ -103,6 +103,12 @@ export function buildFloors() {
     grassBG.receiveShadow = true;
     grassBG.userData.kind = "grass-bg";
     root.add(grassBG);
+
+    // Sparse landscape decoration (trees) at hand-picked positions in
+    // open grass outside the building cluster. Edit LANDSCAPE_DECOR =
+    // false (top of file) to turn off, or trim the positions array in
+    // addLandscapeDecor() to reduce density.
+    if (LANDSCAPE_DECOR) addLandscapeDecor(root);
   }
 
   for (const floor of FLOORS) {
@@ -594,22 +600,20 @@ const SITUM_CAP_COLOR    = 0x8d8474;  // darker trim cap
 const ROAD_SLAB_HEIGHT = 0.1;
 const ROAD_SLAB_LIFT   = 0.06;
 
-const DOOR_MARKER_COLOR = 0xf0a92b;   // warm gold — matches the brand accent
-const DOOR_RADIUS       = 0.22;       // world units
+const DOOR_MARKER_COLOR = 0x3d2210;   // dark walnut — reads as a door
+const DOOR_RADIUS       = 0.26;       // world units
 const DOOR_LIFT         = 0.04;       // sit just above the floor texture
 
-// Door visual — just a small gold pin on the floor at the door
-// position. The wooden door panels were creating dark rectangles all
-// over the walls, so they're disabled. The door is still a graph node
-// in pathfinding via the DOORS export.
+// Door visual — small dark disc on the floor at the door position.
+// The door is also a graph node in pathfinding via the DOORS export.
 function buildDoorMarker(door) {
   const group = new THREE.Group();
   const cx = offsetX(door.x);
   const cz = offsetZ(door.z);
   const pin = new THREE.Mesh(
-    new THREE.CylinderGeometry(DOOR_RADIUS * 0.8, DOOR_RADIUS * 0.8, 0.03, 16),
-    new THREE.MeshBasicMaterial({
-      color: DOOR_MARKER_COLOR, transparent: true, opacity: 0.7, depthWrite: false,
+    new THREE.CylinderGeometry(DOOR_RADIUS * 0.8, DOOR_RADIUS * 0.8, 0.04, 16),
+    new THREE.MeshStandardMaterial({
+      color: DOOR_MARKER_COLOR, roughness: 0.85, metalness: 0, flatShading: true,
     }),
   );
   pin.position.set(cx, DOOR_LIFT + 0.02, cz);
@@ -690,6 +694,11 @@ const LP_ROOF_OVERHANG  = 0.00;       // small offset would spike at acute corne
 const TERRAIN_GRASS     = 0x6f8a4d;   // mid-green grass
 const TERRAIN_PLAZA     = 0xd9cba8;   // light sand plaza
 
+// Atmosphere — sparse trees in the open landscape around the compound.
+// Flip to false to remove all decoration if frame-rate drops or you
+// just want a clean diagram.
+const LANDSCAPE_DECOR   = true;
+
 const lpWallMat = new THREE.MeshStandardMaterial({
   color: LP_WALL_COLOR, roughness: 0.85, metalness: 0, flatShading: true,
 });
@@ -728,6 +737,64 @@ function addOutdoorTerrain(group) {
     if (room.floor !== 1) continue;
     const platform = buildBuildingPlatform(room);
     if (platform) group.add(platform);
+  }
+}
+
+// ------- Trees: hand-placed in open grass, away from buildings/paths -------
+const treeTrunkMat = new THREE.MeshStandardMaterial({
+  color: 0x5a3a20, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const treeFoliageMat = new THREE.MeshStandardMaterial({
+  color: 0x466e3a, roughness: 0.95, metalness: 0, flatShading: true,
+});
+
+function buildTree(x, y, z, scale = 1) {
+  const g = new THREE.Group();
+  const trunkH = 0.7 * scale;
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.10 * scale, 0.14 * scale, trunkH, 6),
+    treeTrunkMat,
+  );
+  trunk.position.set(x, y + trunkH / 2, z);
+  trunk.castShadow = true;
+  g.add(trunk);
+
+  const foliageH = 1.4 * scale;
+  const foliage = new THREE.Mesh(
+    new THREE.ConeGeometry(0.55 * scale, foliageH, 6),
+    treeFoliageMat,
+  );
+  foliage.position.set(x, y + trunkH + foliageH / 2 - 0.1, z);
+  foliage.castShadow = true;
+  g.add(foliage);
+
+  return g;
+}
+
+// Hand-picked tree positions in LOCAL plan-centered coords. The
+// building bbox in local coords runs roughly x:[-25, +5], z:[-21, +3],
+// so every tree below sits well outside that envelope. Edit / trim
+// freely — the trees are purely decorative and never participate in
+// pathfinding or picking.
+function addLandscapeDecor(root) {
+  const positions = [
+    // East-side landscape
+    [ 14, 0, -10, 1.0],
+    [ 17, 0,  -2, 1.1],
+    [ 12, 0,   8, 0.9],
+    [ 20, 0,   4, 1.0],
+    // South perimeter
+    [ -2, 0,  14, 1.0],
+    [  6, 0,  17, 0.95],
+    [-12, 0,  13, 1.05],
+    // Northwest perimeter
+    [-30, 0, -18, 0.9],
+    [-28, 0,  -2, 1.0],
+    // Far southwest
+    [-22, 0,  16, 0.95],
+  ];
+  for (const [x, y, z, s] of positions) {
+    root.add(buildTree(x, y, z, s));
   }
 }
 
@@ -796,12 +863,13 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
     polygonLocal = [[x1, z1], [x2, z1], [x2, z2], [x1, z2]];
   }
 
-  // Every room — ground and upper floor alike — uses short open-top
-  // walls. The colored interior tile is visible from above on both
-  // levels and no roofs are drawn, giving the model a clean stacked-
-  // box look.
-  const hasFloor2Above = true;
-  const isStandaloneRoofed = false;
+  // Cream tall walls. Rooms with another floor stacked on top get a flat
+  // top (the upper-storey block sits on them), every other room gets a
+  // red hip roof. Footprint polygon is NEVER modified — the roof
+  // adapts to whatever shape the room has.
+  const isFloor1 = room.floor === 1;
+  const hasFloor2Above = isFloor1 && floor1WithFloor2.has(room.id);
+  const isStandaloneRoofed = !hasFloor2Above;
 
   // --- Foundation plinth (slight step at the base) ---
   const foundationPoly = offsetPolygonOutward(polygonLocal, LP_FOUNDATION_OUT);
@@ -811,49 +879,24 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
   foundation.receiveShadow = true;
   group.add(foundation);
 
-  // --- Walls ---
+  // --- Walls (closed cream extrusion) ---
   const wallsBaseY = SITUM_BLOCK_LIFT + LP_FOUNDATION_H;
-  const wallHeight = isStandaloneRoofed ? LP_WALL_HEIGHT_T : LP_WALL_HEIGHT_S;
-  let walls, tile = null, roof = null;
-  if (hasFloor2Above) {
-    // Open-top extrusion — side faces only, no top cap.
-    walls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
-    walls.castShadow = true;
-    walls.receiveShadow = true;
-    group.add(walls);
+  const wallHeight = LP_WALL_HEIGHT_T;
+  const walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
+  walls.position.y = wallsBaseY + wallHeight;
+  walls.castShadow = true;
+  walls.receiveShadow = true;
+  group.add(walls);
 
-    // Colored floor tile + ornament visible from above through the open top.
-    tile = buildExtrudedPolygon(polygonLocal, 0.04, new THREE.MeshStandardMaterial({
-      color: baseColor, roughness: 0.85, metalness: 0, flatShading: true,
-    }));
-    tile.position.y = wallsBaseY + 0.04;
-    tile.receiveShadow = true;
-    group.add(tile);
-
-    let cxL = 0, czL = 0;
-    for (const [lx, lz] of polygonLocal) { cxL += lx; czL += lz; }
-    cxL /= polygonLocal.length;
-    czL /= polygonLocal.length;
-    const ornament = buildRoomOrnament(room, cxL, czL, wallsBaseY + 0.08);
-    if (ornament) group.add(ornament);
-  } else {
-    // Tall closed walls — ExtrudeGeometry (has top cap).
-    walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
-    walls.position.y = wallsBaseY + wallHeight;
-    walls.castShadow = true;
-    walls.receiveShadow = true;
-    group.add(walls);
-
-    // Hip roof on top — floor-2 rooms each get their own roof.
-    if (isStandaloneRoofed) {
-      const roofPoly = LP_ROOF_OVERHANG > 0
-        ? offsetPolygonOutward(polygonLocal, LP_ROOF_OVERHANG)
-        : polygonLocal;
-      roof = buildLowPolyRoof(roofPoly, wallsBaseY + wallHeight, LP_ROOF_RISE);
-      if (roof) {
-        roof.castShadow = true;
-        group.add(roof);
-      }
+  // --- Red hip roof on top (skipped for floor-1 rooms that have a
+  // floor-2 block stacked on them — the upper storey IS their roof) ---
+  let roof = null;
+  if (isStandaloneRoofed) {
+    // No outward offset — overhang at acute U-shape corners would spike.
+    roof = buildLowPolyRoof(polygonLocal, wallsBaseY + wallHeight, LP_ROOF_RISE);
+    if (roof) {
+      roof.castShadow = true;
+      group.add(roof);
     }
   }
 
@@ -871,8 +914,8 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
     room,
     baseColor: baseColor.clone(),
     originalEmissive: new THREE.Color(0, 0, 0),
-    tile: tile || walls,
-    highlightTargets: roof ? [walls, roof] : (tile ? [tile, walls] : [walls]),
+    tile: walls,
+    highlightTargets: roof ? [walls, roof] : [walls],
   };
   return group;
 }
