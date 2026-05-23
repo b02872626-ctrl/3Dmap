@@ -74,9 +74,15 @@ function reframeCamera() {
 let cameraLerp = null;
 function updateCameraLerp() {
   if (!cameraLerp) return;
+  // Capture the current orbit offset on the first frame so the lerp
+  // translates the camera with the target instead of snapping it back
+  // to the iso direction (which would wipe out any rotation the user
+  // has done).
+  if (!cameraLerp.offset) {
+    cameraLerp.offset = camera.position.clone().sub(controls.target);
+  }
   controls.target.lerp(cameraLerp.target, 0.15);
-  // Camera must follow target to keep the iso lock
-  camera.position.copy(controls.target).add(_viewOffset);
+  camera.position.copy(controls.target).add(cameraLerp.offset);
   cameraLerp.t = Math.min(1, cameraLerp.t + 0.06);
   if (cameraLerp.t >= 1) cameraLerp = null;
 }
@@ -393,14 +399,22 @@ function flyToRoom(group) {
 }
 
 let _origDamping = null;
-function flyTo(targetPoint, zoomLevel, dur = 55) {
+function flyTo(targetPoint, zoomLevel, dur = 55, resetOrbit = false) {
   if (!flyAnim) _origDamping = controls.enableDamping;
   controls.enableDamping = false;
+  // Snapshot the current camera-to-target offset. While the fly runs we
+  // hold this offset constant so the user's chosen orbit angle isn't
+  // wiped out. resetOrbit=true overrides it with the canonical iso
+  // direction (used by the reset-cam button).
+  const offset = resetOrbit
+    ? _viewOffset.clone()
+    : camera.position.clone().sub(controls.target);
   flyAnim = {
     tgtFrom:  controls.target.clone(),
     tgtTo:    targetPoint.clone(),
     zoomFrom: camera.zoom,
     zoomTo:   zoomLevel,
+    offset,
     t: 0, dur,
   };
   cameraLerp = null;
@@ -412,8 +426,8 @@ function updateFly() {
   const k = Math.min(1, flyAnim.t / flyAnim.dur);
   const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);   // cosine ease in/out
   controls.target.lerpVectors(flyAnim.tgtFrom, flyAnim.tgtTo, ease);
-  // Camera position is FIXED relative to target — iso direction, iso distance
-  camera.position.copy(controls.target).add(_viewOffset);
+  // Hold the captured offset so the orbit angle stays put.
+  camera.position.copy(controls.target).add(flyAnim.offset);
   camera.zoom = THREE.MathUtils.lerp(flyAnim.zoomFrom, flyAnim.zoomTo, ease);
   camera.updateProjectionMatrix();
   if (k >= 1) {
@@ -449,9 +463,10 @@ document.getElementById("toggle-explode").addEventListener("click", (e) => {
 
 document.getElementById("reset-cam").addEventListener("click", () => {
   // Drop the persisted view and fly back to the auto-framed default
-  // for the active building.
+  // for the active building. resetOrbit=true snaps the orbit back to
+  // the canonical iso direction in case the user has rotated.
   try { localStorage.removeItem(CAM_STORAGE_KEY); } catch {}
-  frameInitialView(true);
+  frameInitialView(true, true);
 });
 
 // ---------------- Legend / category filter ----------------
@@ -624,9 +639,11 @@ applyCategoryFilter();
 const CAM_STORAGE_KEY = `cam-view-${ACTIVE_BUILDING.id}`;
 function saveCameraView() {
   try {
+    const offset = camera.position.clone().sub(controls.target);
     localStorage.setItem(CAM_STORAGE_KEY, JSON.stringify({
       zoom:        camera.zoom,
       target:      { x: controls.target.x, y: controls.target.y, z: controls.target.z },
+      offset:      { x: offset.x, y: offset.y, z: offset.z },
       activeFloor: activeFloor,
       viewMode:    viewMode,
     }));
@@ -656,7 +673,18 @@ function restoreCameraView() {
   }
   controls.target.set(saved.target.x, saved.target.y, saved.target.z);
   camera.zoom = saved.zoom;
-  camera.position.copy(controls.target).add(_viewOffset);
+  // If we persisted the orbit offset, restore it so the user's chosen
+  // rotation comes back. Older saves without an offset fall back to the
+  // canonical iso direction.
+  if (saved.offset && Number.isFinite(saved.offset.x)) {
+    camera.position.set(
+      saved.target.x + saved.offset.x,
+      saved.target.y + saved.offset.y,
+      saved.target.z + saved.offset.z,
+    );
+  } else {
+    camera.position.copy(controls.target).add(_viewOffset);
+  }
   camera.updateProjectionMatrix();
   controls.update();
   // Same fix as frameInitialView — cancel any leftover lerp.
@@ -672,7 +700,7 @@ controls.addEventListener("change", () => {
 // On load: try restore, else use auto-frame default.
 if (!restoreCameraView()) frameInitialView();
 
-function frameInitialView(animate = false) {
+function frameInitialView(animate = false, resetOrbit = false) {
   // Compute the actual room-cluster bounds on the currently-visible floors,
   // not the (much larger) slab. This way the camera lands on the gallery
   // area, not on empty slab padding.
@@ -702,7 +730,7 @@ function frameInitialView(animate = false) {
   // Tight default: cluster fills most of the visible frustum
   const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 0.95), 0.85, 2.5);
   if (animate) {
-    flyTo(targetVec, zoom, 55);
+    flyTo(targetVec, zoom, 55, resetOrbit);
   } else {
     controls.target.copy(targetVec);
     camera.position.copy(targetVec).add(_viewOffset);

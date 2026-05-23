@@ -1,6 +1,7 @@
 // =============================================================
-//  Three.js scene: ORTHOGRAPHIC camera locked to an isometric
-//  direction. Pan + zoom only — no rotation.
+//  Three.js scene: ORTHOGRAPHIC camera. Starts at an isometric
+//  direction but free to orbit — pan, zoom, and rotate are all
+//  enabled.
 // =============================================================
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -54,28 +55,30 @@ export function createScene(canvas) {
   camera.zoom = 1;
   camera.updateProjectionMatrix();
 
-  // ---------------- Orbit controls: pan + zoom, NO rotation ----------------
+  // ---------------- Orbit controls: pan + zoom + rotate ----------------
   const controls = new OrbitControls(camera, canvas);
   controls.target.copy(initialTarget);
-  controls.enableRotate = false;             // <- LOCKED to iso
+  controls.enableRotate = true;
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.enablePan  = true;
   controls.enableZoom = true;
   controls.zoomSpeed  = 1.1;
   controls.panSpeed   = 0.8;
+  controls.rotateSpeed = 0.9;
   controls.minZoom    = 0.45;                // can't zoom out further than ~half size
   controls.maxZoom    = 4.5;                 // can't zoom in further than ~4.5×
   controls.screenSpacePanning = true;        // map-style panning
-  // Map-style mouse: left/right click drag = pan, wheel = zoom
+  // Left-drag rotates the orbit (default 3D-viewer behaviour). Right-drag
+  // pans the map. Wheel / pinch zooms.
   controls.mouseButtons = {
-    LEFT:   THREE.MOUSE.PAN,
+    LEFT:   THREE.MOUSE.ROTATE,
     MIDDLE: THREE.MOUSE.DOLLY,
     RIGHT:  THREE.MOUSE.PAN,
   };
-  // Touch: single finger pans, two-finger pinch zooms
+  // Touch: one-finger rotates, two-finger pinch zoom + pan.
   controls.touches = {
-    ONE: THREE.TOUCH.PAN,
+    ONE: THREE.TOUCH.ROTATE,
     TWO: THREE.TOUCH.DOLLY_PAN,
   };
 
