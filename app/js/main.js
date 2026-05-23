@@ -166,10 +166,10 @@ function select(group) {
   selected = group;
   if (group) {
     emphasizeGroup(group, 0.5);
-    showDetails(group.userData.room);
+    showRoomInLegend(group.userData.room);
     flyToRoom(group);
   } else {
-    hideDetails();
+    showCategoriesInLegend();
   }
 }
 
@@ -214,53 +214,102 @@ canvas.addEventListener("pointerup", (e) => {
 canvas.addEventListener("pointercancel", () => { pointerDownInfo = null; });
 canvas.addEventListener("pointerleave", () => { pointerDownInfo = null; });
 
-// ---------------- Details panel ----------------
-const detailsEl = document.getElementById("details");
-const detailsTitle = document.getElementById("details-title");
-const detailsSub = document.getElementById("details-sub");
-const detailsChip = document.getElementById("details-chip");
-const detailsMeta = document.getElementById("details-meta");
-document.getElementById("details-close").addEventListener("click", () => {
+// ---------------- Room info (left panel) ----------------
+// When a room is clicked, the left panel swaps from the Collections list
+// to an info card for that room (small SVG thumbnail of its footprint,
+// category chip, metadata, Get Directions CTA).
+const legendCategoriesEl = document.getElementById("legend-categories");
+const legendInfoEl       = document.getElementById("legend-info");
+const infoChip           = document.getElementById("info-chip");
+const infoTitle          = document.getElementById("info-title");
+const infoSub            = document.getElementById("info-sub");
+const infoMeta           = document.getElementById("info-meta");
+const roomPicEl          = document.getElementById("room-pic");
+
+document.getElementById("legend-back").addEventListener("click", () => {
   if (selected) restoreGroup(selected);
   selected = null;
-  hideDetails();
+  showCategoriesInLegend();
 });
-
-// "Get Directions" CTA inside details panel — opens directions with current
-// room pre-filled as destination, then prompts the user to pick a start.
-document.getElementById("details-directions").addEventListener("click", () => {
+document.getElementById("info-directions").addEventListener("click", () => {
   if (!selected) return;
-  const destRoom = selected.userData.room;
-  openDirections({ destination: destRoom });
+  openDirections({ destination: selected.userData.room });
 });
 
-function showDetails(room) {
-  const cat = CATEGORIES[room.category] || CATEGORIES.amenity;
-  detailsTitle.textContent = room.name;
-  detailsSub.textContent = `Room ${room.id} · Floor ${room.floor}`;
-  detailsChip.textContent = cat.label;
-  detailsChip.style.background = "#" + cat.color.toString(16).padStart(6, "0");
-  detailsChip.style.color = "#fff";
+function showRoomInLegend(room) {
+  const cat   = CATEGORIES[room.category] || CATEGORIES.amenity;
+  const color = "#" + cat.color.toString(16).padStart(6, "0");
 
-  detailsMeta.innerHTML = "";
+  infoTitle.textContent = room.name;
+  infoSub.textContent   = `Room ${room.id} · Floor ${room.floor}`;
+  infoChip.textContent  = cat.label;
+  infoChip.style.background = color;
+
+  roomPicEl.innerHTML = "";
+  const thumb = buildRoomThumbnail(room, color);
+  if (thumb) roomPicEl.appendChild(thumb);
+
+  infoMeta.innerHTML = "";
   const meta = [
-    ["Floor", `${room.floor}`],
-    ["Category", cat.label],
-    ["Footprint", `${room.footprint.w} × ${room.footprint.d} m`],
+    ["Floor",     `${room.floor}`],
+    ["Category",  cat.label],
+    ["Footprint", `${room.footprint.w.toFixed(1)} × ${room.footprint.d.toFixed(1)} m`],
   ];
-  if (room.feature)  meta.push(["Type", "Special Feature Space"]);
+  if (room.feature)  meta.push(["Type", "Special Feature"]);
   if (room.entrance) meta.push(["Type", "Public Entrance"]);
   if (room.open)     meta.push(["Type", "Open Courtyard"]);
-  if (room.icon)     meta.push(["Marker", room.icon]);
-
   for (const [k, v] of meta) {
     const dt = document.createElement("dt"); dt.textContent = k;
     const dd = document.createElement("dd"); dd.textContent = v;
-    detailsMeta.append(dt, dd);
+    infoMeta.append(dt, dd);
   }
-  detailsEl.classList.add("visible");
+
+  legendCategoriesEl.hidden = true;
+  legendInfoEl.hidden       = false;
 }
-function hideDetails() { detailsEl.classList.remove("visible"); }
+
+function showCategoriesInLegend() {
+  legendCategoriesEl.hidden = false;
+  legendInfoEl.hidden       = true;
+}
+
+// Small SVG render of the room footprint — the polygon (if available)
+// filled in the category color on a dark plate, used as the "picture"
+// at the top of the info card.
+function buildRoomThumbnail(room, fillColor) {
+  let verts;
+  if (Array.isArray(room.polygon) && room.polygon.length >= 3) {
+    verts = room.polygon.map(([x, z]) => [x, z]);
+  } else {
+    const { x, z, w, d } = room.footprint;
+    verts = [[x, z], [x + w, z], [x + w, z + d], [x, z + d]];
+  }
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [vx, vz] of verts) {
+    if (vx < minX) minX = vx;
+    if (vx > maxX) maxX = vx;
+    if (vz < minZ) minZ = vz;
+    if (vz > maxZ) maxZ = vz;
+  }
+  const w = maxX - minX, d = maxZ - minZ;
+  if (!(w > 0 && d > 0)) return null;
+  const pad = Math.max(w, d) * 0.12;
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `${minX - pad} ${minZ - pad} ${w + pad * 2} ${d + pad * 2}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  const poly = document.createElementNS(NS, "polygon");
+  poly.setAttribute("points", verts.map(([x, z]) => `${x},${z}`).join(" "));
+  poly.setAttribute("fill", fillColor);
+  poly.setAttribute("fill-opacity", "0.9");
+  poly.setAttribute("stroke", "#0d1117");
+  poly.setAttribute("stroke-width", String(Math.max(w, d) * 0.02));
+  poly.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(poly);
+  return svg;
+}
 
 // ---------------- Camera fly-to ----------------
 // Single eased animation that moves BOTH camera position and OrbitControls
@@ -726,7 +775,7 @@ function openDirections(opts = {}) {
   dirEl.classList.add("visible");
   dirOpenBtn.classList.add("active");
 
-  // Pre-fill from a details "Get Directions" click
+  // Pre-fill from the info card's "Get Directions" click
   if (opts.destination) {
     dirEnd = opts.destination;
     if (!dirStart) pickingSlot = "start";
@@ -742,9 +791,9 @@ function openDirections(opts = {}) {
     pickingSlot = dirStart ? (dirEnd ? null : "end") : "start";
   }
 
-  // Close details panel and clear selection so it doesn't get in the way
+  // Clear room selection so the info card doesn't get in the way
   if (selected) { restoreGroup(selected); selected = null; }
-  hideDetails();
+  showCategoriesInLegend();
   refreshDirectionsUI();
   if (dirStart && dirEnd) recomputeRoute();
 }

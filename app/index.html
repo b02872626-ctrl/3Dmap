@@ -80,26 +80,29 @@
     <button id="reset-cam"     title="Reset camera">⟲</button>
   </aside>
 
-  <!-- Category filter (left) -->
+  <!-- Left panel — two modes: collections list (default), and room info
+       (when a room is selected on the map). -->
   <aside class="legend" id="legend">
-    <h3>Collections</h3>
-    <ul id="legend-list"></ul>
-  </aside>
-
-  <!-- Details panel (bottom-right slide-in) -->
-  <section class="details" id="details" aria-hidden="true">
-    <button class="close" id="details-close" aria-label="Close">×</button>
-    <span class="chip" id="details-chip">—</span>
-    <h2 id="details-title">Select a gallery</h2>
-    <p id="details-sub">Tap a room on the map to see details.</p>
-    <dl id="details-meta"></dl>
-    <div class="details-actions">
-      <button id="details-directions" class="primary-btn">
+    <div id="legend-categories">
+      <h3>Collections</h3>
+      <ul id="legend-list"></ul>
+    </div>
+    <div id="legend-info" hidden>
+      <button class="legend-back" id="legend-back" type="button" aria-label="Back to collections">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M15.5 4 7 12.5 15.5 21l1.4-1.4-7-7 7-7z"/></svg>
+        Collections
+      </button>
+      <div class="room-pic" id="room-pic"></div>
+      <span class="chip" id="info-chip">—</span>
+      <h2 id="info-title">—</h2>
+      <p class="sub" id="info-sub">—</p>
+      <dl id="info-meta"></dl>
+      <button class="primary-btn full" id="info-directions" type="button">
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4zM9 14v-3h4V8.5l3.5 3-3.5 3V14H10v.01z"/></svg>
         Get Directions
       </button>
     </div>
-  </section>
+  </aside>
 
   <!-- Hover tooltip (desktop only) -->
   <div class="tooltip" id="tooltip" aria-hidden="true"></div>

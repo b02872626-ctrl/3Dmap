@@ -575,6 +575,70 @@ html, body {
   box-shadow: 0 2px 4px rgba(0,0,0,0.4);
 }
 
+/* ---------- Room info mode (inside legend) ---------- */
+.legend-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 4px 8px 4px 4px;
+  margin: 0 0 10px -4px;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.15s var(--ease);
+}
+.legend-back:hover { background: var(--bg-2); color: var(--text-0); }
+.room-pic {
+  width: 100%;
+  height: 120px;
+  border-radius: 10px;
+  background: #1a1f25;
+  border: 1px solid var(--line);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.room-pic svg { width: 80%; height: 80%; }
+#legend-info .chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #fff;
+}
+#legend-info h2 {
+  margin: 8px 0 2px;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--text-0);
+}
+#legend-info p.sub {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+#legend-info dl {
+  margin: 0 0 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+  font-size: 12px;
+}
+#legend-info dt { color: var(--text-2); }
+#legend-info dd { margin: 0; color: var(--text-0); }
+.primary-btn.full { width: 100%; justify-content: center; }
+
 /* ---------- Details panel ---------- */
 .details {
   position: fixed;
