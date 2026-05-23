@@ -381,6 +381,10 @@ function buildSitumFloor(group, floor, roomGroups) {
       group.add(buildDoorMarker(door));
     }
   }
+
+  // Zone-based facade pass (off by default; see SHOW_FACADE_DETAILS /
+  // SHOW_FACADE_DEBUG and FACADE_ZONES at the bottom of this file).
+  addFacadeFromZones(group, floor);
 }
 
 const PATH_COLOR        = 0xc8b893;   // primary spine — warm flagstone
@@ -1415,8 +1419,15 @@ function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
 //    FACADE_MIN_EDGE_LEN   — edges shorter than this get no veranda
 //    FACADE_DOOR_CLEARANCE — column-position skip radius around doors
 // ============================================================
-const FACADE_DETAILS         = true;
-const FACADE_RAILING_HIDDEN  = false;
+// IMPORTANT: this is the OLD broken auto-layer that derived edges
+// from every polygon. It rotated horizontal BoxGeometry pieces with
+// Math.atan2(ux, uz), which is 90° off for a box whose long axis is
+// +X — so verandas, eave trim and railings ran perpendicular to the
+// walls (long beams sticking through roofs and across courtyards).
+// Disabled here. The new system lives in addFacadeFromZones below
+// and reads explicit zones from FACADE_ZONES.
+const FACADE_DETAILS         = false;
+const FACADE_RAILING_HIDDEN  = true;
 const FACADE_VERANDA_WIDTH   = 0.40;
 const FACADE_VERANDA_H       = 0.05;
 const FACADE_COLUMN_SPACING  = 1.80;
@@ -1610,6 +1621,151 @@ function addBuildingFacadeDetails(group, opts) {
     inst.castShadow = true;
     inst.receiveShadow = true;
     group.add(inst);
+  }
+}
+
+// ============================================================
+//  FacadeZones — explicit, zone-based facade pass (v2)
+//  ----------------------------------------------------------
+//  Replaces the broken auto-derived layer above. Nothing renders
+//  unless an entry in FACADE_ZONES asks for it. Coords are RAW
+//  plan units (the same coordinate system as room.footprint.x/z
+//  in data.js), making zones easy to read off the data file.
+//
+//  Toggles:
+//    SHOW_FACADE_DETAILS — render the actual columns/railings
+//    SHOW_FACADE_DEBUG   — overlay magenta cubes + a yellow line
+//                          on each zone so placement can be
+//                          verified before turning details on
+//
+//  Each zone:
+//    {
+//      buildingId: "5",
+//      type: "columns" | "railings",
+//      edgeStart:  [planX, planZ],
+//      edgeEnd:    [planX, planZ],
+//      outwardDir: [dirX, dirZ],   // unit vec away from building
+//      baseY: <floor of element>,
+//      topY:  <top of element — must stay below the roof eave>,
+//      spacing: <metres>,
+//      outset: <metres from wall>,
+//      floor: 1 | 2,
+//    }
+//
+//  Sanity checks applied at render time:
+//    · column position must lie on the (outset-shifted) edge segment
+//    · topY must not pass the roof apex (capped at 2.7)
+//    · zero-length edges are skipped
+//    · baseY < topY
+// ============================================================
+const SHOW_FACADE_DETAILS = false;   // master switch for the new layer
+const SHOW_FACADE_DEBUG   = false;   // magenta placement markers + edge guides
+
+// Test entry — one zone, on the small Religion pavilion (room 5).
+// Verify visually with SHOW_FACADE_DEBUG = true, then flip
+// SHOW_FACADE_DETAILS = true to render columns. Expand to other
+// buildings only after this one looks correct.
+const FACADE_ZONES = [
+  {
+    buildingId: "5",
+    type:       "columns",
+    edgeStart:  [13.86, 27.42],   // south-west corner of room 5
+    edgeEnd:    [17.70, 27.42],   // south-east corner of room 5
+    outwardDir: [0, 1],           // +Z is south on the SVG
+    baseY:      0.21,             // top of foundation plinth
+    topY:       1.81,             // top of wall, just under the eave
+    spacing:    1.20,
+    outset:     0.40,
+    floor:      1,
+  },
+];
+
+const facadeDebugDotMat = new THREE.MeshBasicMaterial({
+  color: 0xff00ff, depthTest: false, transparent: true, opacity: 0.95,
+});
+const facadeDebugEdgeMat = new THREE.LineBasicMaterial({
+  color: 0xffcc00, depthTest: false, transparent: true, opacity: 0.9,
+});
+
+function addFacadeFromZones(floorGroup, floor) {
+  if (!SHOW_FACADE_DETAILS && !SHOW_FACADE_DEBUG) return;
+
+  for (const zone of FACADE_ZONES) {
+    if (zone.floor !== floor.id) continue;
+
+    // Convert raw plan coords to local plan-centred coords.
+    const sx = zone.edgeStart[0] - planCenter.x;
+    const sz = zone.edgeStart[1] - planCenter.z;
+    const ex = zone.edgeEnd[0]   - planCenter.x;
+    const ez = zone.edgeEnd[1]   - planCenter.z;
+    const dx = ex - sx, dz = ez - sz;
+    const edgeLen = Math.hypot(dx, dz);
+    if (edgeLen < 0.1) continue;
+    if (zone.topY <= zone.baseY) continue;
+
+    // Normalise outward direction defensively.
+    const [nxRaw, nzRaw] = zone.outwardDir;
+    const nLen = Math.hypot(nxRaw, nzRaw) || 1;
+    const nx = nxRaw / nLen, nz = nzRaw / nLen;
+
+    const colH = zone.topY - zone.baseY;
+    const count = Math.max(2, Math.floor(edgeLen / Math.max(0.2, zone.spacing)) + 1);
+
+    // --- Debug visualisation (always-on-top guides) ---
+    if (SHOW_FACADE_DEBUG) {
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(sx + nx * zone.outset, zone.baseY + 0.02, sz + nz * zone.outset),
+        new THREE.Vector3(ex + nx * zone.outset, zone.baseY + 0.02, ez + nz * zone.outset),
+      ]);
+      const line = new THREE.Line(lineGeo, facadeDebugEdgeMat);
+      line.renderOrder = 99;
+      floorGroup.add(line);
+
+      const dotGeo = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+      for (let i = 0; i < count; i++) {
+        const t = (count === 1) ? 0.5 : (i / (count - 1));
+        const px = sx + dx * t + nx * zone.outset;
+        const pz = sz + dz * t + nz * zone.outset;
+        const dot = new THREE.Mesh(dotGeo, facadeDebugDotMat);
+        dot.position.set(px, zone.baseY + 0.1, pz);
+        dot.renderOrder = 100;
+        floorGroup.add(dot);
+      }
+    }
+
+    if (!SHOW_FACADE_DETAILS) continue;
+
+    // Sanity: never let a column rise past a sensible roof apex.
+    if (zone.topY > 2.7) continue;
+
+    if (zone.type === "columns") {
+      const geo = new THREE.CylinderGeometry(
+        FACADE_COLUMN_RADIUS, FACADE_COLUMN_RADIUS, colH, 6,
+      );
+      const ux = dx / edgeLen, uz = dz / edgeLen;
+      for (let i = 0; i < count; i++) {
+        const t = (count === 1) ? 0.5 : (i / (count - 1));
+        const px = sx + dx * t + nx * zone.outset;
+        const pz = sz + dz * t + nz * zone.outset;
+
+        // Sanity: ensure the position lies on the outset-shifted edge
+        // segment (within a 0.5 m tolerance perpendicular to the edge).
+        const baseX = sx + nx * zone.outset;
+        const baseZ = sz + nz * zone.outset;
+        const projT = (px - baseX) * ux + (pz - baseZ) * uz;
+        const perpD = Math.abs((px - baseX) * (-uz) + (pz - baseZ) * ux);
+        if (projT < -0.05 || projT > edgeLen + 0.05) continue;
+        if (perpD > 0.5) continue;
+
+        const col = new THREE.Mesh(geo, facadeColumnMat);
+        col.position.set(px, zone.baseY + colH / 2, pz);
+        col.castShadow = true;
+        col.receiveShadow = true;
+        floorGroup.add(col);
+      }
+    }
+    // Railings deliberately deferred until columns are verified per
+    // the user's "start small, expand later" instruction.
   }
 }
 
