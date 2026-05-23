@@ -109,6 +109,9 @@ export function buildFloors() {
     // false (top of file) to turn off, or trim the positions array in
     // addLandscapeDecor() to reduce density.
     if (LANDSCAPE_DECOR) addLandscapeDecor(root);
+
+    // Subtle low-poly grass color patches for ground variation.
+    if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
   }
 
   for (const floor of FLOORS) {
@@ -385,6 +388,12 @@ function buildSitumFloor(group, floor, roomGroups) {
   // Zone-based facade pass (off by default; see SHOW_FACADE_DETAILS /
   // SHOW_FACADE_DEBUG and FACADE_ZONES at the bottom of this file).
   addFacadeFromZones(group, floor);
+
+  // GroundSurfaceDetails — path curbs + stair zones (ground floor only).
+  if (SHOW_GROUND_DETAILS && floor.id === 1) {
+    if (SHOW_CURBS)         addPathCurbsForFloor(group);
+    if (SHOW_STAIR_DETAILS) addStairZonesForFloor(group, floor.id);
+  }
 }
 
 const PATH_COLOR        = 0xc8b893;   // primary spine — warm flagstone
@@ -752,6 +761,16 @@ function addOutdoorTerrain(group) {
     if (room.floor !== 1) continue;
     const platform = buildBuildingPlatform(room);
     if (platform) group.add(platform);
+
+    // GroundSurfaceDetails — platform edge band + tile-grid overlay
+    if (SHOW_GROUND_DETAILS) {
+      const band = buildGdPlatformEdgeBand(room);
+      if (band) group.add(band);
+      if (SHOW_PAVING_LINES) {
+        const overlay = buildGdPavingOverlay(room);
+        if (overlay) group.add(overlay);
+      }
+    }
   }
 }
 
@@ -1766,6 +1785,281 @@ function addFacadeFromZones(floorGroup, floor) {
     }
     // Railings deliberately deferred until columns are verified per
     // the user's "start small, expand later" instruction.
+  }
+}
+
+// ============================================================
+//  GroundSurfaceDetails — ground & plaza decoration pass
+//  ----------------------------------------------------------
+//  Pure decoration. Adds on top of the existing platforms, paths,
+//  and grass:
+//    · Subtle stone-tile grid overlay on each platform.
+//    · Slightly darker stone band wrapped around each platform's
+//      perimeter so it reads as a raised pad, not a flat polygon.
+//    · Thin raised curbs running alongside primary + secondary
+//      walk paths (offset outside the path, so the existing painted
+//      stripes still mark the path boundary itself).
+//    · Optional step blocks at STAIR_ZONES (empty by default — no
+//      stair geometry exists in the source data yet).
+//    · Scattered subtle low-poly grass-color patches in the open
+//      grass area, for ground variation.
+//
+//  Toggles (all default true):
+//    SHOW_GROUND_DETAILS   — master switch
+//    SHOW_PAVING_LINES     — tile grid on platforms
+//    SHOW_CURBS            — raised stone curbs along paths
+//    SHOW_STAIR_DETAILS    — step blocks at STAIR_ZONES
+//    SHOW_GRASS_VARIATION  — green color patches
+// ============================================================
+const SHOW_GROUND_DETAILS   = true;
+const SHOW_PAVING_LINES     = true;
+const SHOW_CURBS            = true;
+const SHOW_STAIR_DETAILS    = true;
+const SHOW_GRASS_VARIATION  = true;
+
+// Tile grid on platforms
+const GD_TILE_SIZE          = 1.60;   // metres — distance between grout lines
+const GD_TILE_OPACITY       = 0.30;   // alpha of the grout line in the overlay
+const GD_TILE_LIFT          = 0.003;  // metres above platform surface
+
+// Path curbs
+const GD_CURB_HEIGHT        = 0.05;   // metres — how much the curb rises
+const GD_CURB_WIDTH         = 0.09;   // metres — perpendicular thickness
+const GD_CURB_GAP           = 0.04;   // metres — gap between path edge and curb
+const GD_CURB_END_INSET     = 0.40;   // metres — pull-back from each waypoint
+
+// Platform edge band
+const GD_EDGE_WIDTH         = 0.20;   // metres — width of the band around platforms
+const GD_EDGE_HEIGHT        = 0.025;  // metres — band thickness
+
+// Stair zones — explicit, none defined yet. Add entries like:
+// { start: [px, pz], end: [px, pz], stepCount: 3, stepHeight: 0.06,
+//   stepDepth: 0.30, width: 1.20, floor: 1 }
+const STAIR_ZONES = [];
+
+// Materials
+const gdEdgeBandMat = new THREE.MeshStandardMaterial({
+  color: 0xb19a78, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const gdCurbMat = new THREE.MeshStandardMaterial({
+  color: 0x8d8474, roughness: 0.92, metalness: 0, flatShading: true,
+});
+const gdStairMat = new THREE.MeshStandardMaterial({
+  color: 0xa89478, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const gdGrassPatchMats = [
+  new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 1.0, metalness: 0, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0x7c9852, roughness: 1.0, metalness: 0, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0x6c8a40, roughness: 1.0, metalness: 0, flatShading: true }),
+];
+
+// Shared paving texture — cloned per platform so each can set its
+// own .repeat without affecting the others.
+let _gdPavingTex = null;
+function gdGetPavingTexture() {
+  if (_gdPavingTex) return _gdPavingTex;
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.strokeStyle = `rgba(120, 102, 80, ${GD_TILE_OPACITY})`;
+  ctx.lineWidth = 2.2;
+  // One grout square — gets tiled via texture.repeat.
+  ctx.strokeRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  _gdPavingTex = tex;
+  return tex;
+}
+
+// Same logic as buildBuildingPlatform — used so the overlay / band
+// match the actual platform polygon exactly.
+function gdPlatformPolygon(room) {
+  let polygonLocal;
+  if (Array.isArray(room.polygon) && room.polygon.length >= 3) {
+    polygonLocal = room.polygon.map(([px, py]) => [px - planCenter.x, py - planCenter.z]);
+  } else {
+    const { x, z, w, d } = room.footprint;
+    const inset = 0.06;
+    polygonLocal = [
+      [offsetX(x + inset),      offsetZ(z + inset)],
+      [offsetX(x + w - inset),  offsetZ(z + inset)],
+      [offsetX(x + w - inset),  offsetZ(z + d - inset)],
+      [offsetX(x + inset),      offsetZ(z + d - inset)],
+    ];
+  }
+  return offsetPolygonOutward(polygonLocal, PLATFORM_PAD);
+}
+
+// Tile grid overlay for a single platform polygon.
+function buildGdPavingOverlay(room) {
+  const platformPoly = gdPlatformPolygon(room);
+
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, z] of platformPoly) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  }
+  const bw = maxX - minX, bd = maxZ - minZ;
+  if (bw < 0.6 || bd < 0.6) return null;
+
+  const tex = gdGetPavingTexture().clone();
+  tex.needsUpdate = true;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(bw / GD_TILE_SIZE, bd / GD_TILE_SIZE);
+
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false,
+  });
+
+  // Almost-flat extrusion that follows the platform polygon exactly.
+  const overlay = buildExtrudedPolygon(platformPoly, 0.001, mat);
+  overlay.position.y = PLATFORM_Y + PLATFORM_H + GD_TILE_LIFT;
+  return overlay;
+}
+
+// Darker band wrapped around the platform perimeter — sits at
+// PLATFORM_Y, sticking out GD_EDGE_WIDTH past the platform so the
+// platform reads as a raised pad with a stone border.
+function buildGdPlatformEdgeBand(room) {
+  const platformPoly = gdPlatformPolygon(room);
+  const outerPoly = offsetPolygonOutward(platformPoly, GD_EDGE_WIDTH);
+
+  // Outer shape with the platform polygon as a hole = a polygon ring.
+  const shape = new THREE.Shape();
+  for (let i = 0; i < outerPoly.length; i++) {
+    const [x, z] = outerPoly[i];
+    if (i === 0) shape.moveTo(x, z); else shape.lineTo(x, z);
+  }
+  const hole = new THREE.Path();
+  for (let i = 0; i < platformPoly.length; i++) {
+    const [x, z] = platformPoly[i];
+    if (i === 0) hole.moveTo(x, z); else hole.lineTo(x, z);
+  }
+  shape.holes.push(hole);
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: GD_EDGE_HEIGHT, bevelEnabled: false,
+  });
+  geo.rotateX(Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, gdEdgeBandMat);
+  mesh.position.y = PLATFORM_Y + GD_EDGE_HEIGHT;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// Raised stone curbs along each primary / secondary path edge.
+// Curbs are offset outward from the path centreline (path style
+// half-width + small gap + half curb width) and pulled back at each
+// end so they don't pile up on the waypoint disc.
+function addPathCurbsForFloor(group) {
+  if (!WAYPOINTS || !WAYPOINT_EDGES) return;
+  const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
+
+  for (const edge of WAYPOINT_EDGES) {
+    const [aId, bId, type = "primary"] = edge;
+    const style = PATH_STYLE[type] ?? PATH_STYLE.primary;
+    if (!style.curbs) continue;
+
+    const a = wpById.get(aId), b = wpById.get(bId);
+    if (!a || !b) continue;
+
+    const ax = offsetX(a.x), az = offsetZ(a.z);
+    const bx = offsetX(b.x), bz = offsetZ(b.z);
+    const dx = bx - ax, dz = bz - az;
+    const fullLen = Math.hypot(dx, dz);
+    const curbLen = fullLen - 2 * GD_CURB_END_INSET;
+    if (curbLen < 0.6) continue;
+
+    const ux = dx / fullLen, uz = dz / fullLen;
+    // Perpendicular (in XZ) — 90° clockwise around Y from forward.
+    const px = -uz, pz = ux;
+    const sideOffset = style.width / 2 + GD_CURB_GAP + GD_CURB_WIDTH / 2;
+    const curbY = style.yOffset + GD_CURB_HEIGHT / 2;
+    // Box's long axis is +X; rotate so +X aligns with (ux, uz).
+    const yaw = Math.atan2(-uz, ux);
+
+    for (const side of [-1, 1]) {
+      const cx = (ax + bx) / 2 + px * sideOffset * side;
+      const cz = (az + bz) / 2 + pz * sideOffset * side;
+      const curb = new THREE.Mesh(
+        new THREE.BoxGeometry(curbLen, GD_CURB_HEIGHT, GD_CURB_WIDTH),
+        gdCurbMat,
+      );
+      curb.position.set(cx, curbY, cz);
+      curb.rotation.y = yaw;
+      curb.castShadow = true;
+      curb.receiveShadow = true;
+      group.add(curb);
+    }
+  }
+}
+
+// Step blocks at explicit STAIR_ZONES entries. Empty by default —
+// stair geometry isn't encoded in the source data, so this stays
+// dormant until zones are added.
+function addStairZonesForFloor(group, floorId) {
+  for (const zone of STAIR_ZONES) {
+    if (zone.floor !== floorId) continue;
+    const sx = offsetX(zone.start[0]), sz = offsetZ(zone.start[1]);
+    const ex = offsetX(zone.end[0]),   ez = offsetZ(zone.end[1]);
+    const dx = ex - sx, dz = ez - sz;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.1 || zone.stepCount < 1) continue;
+    const ux = dx / len, uz = dz / len;
+    const yaw = Math.atan2(-uz, ux);
+    const stepLen = len / zone.stepCount;
+    for (let i = 0; i < zone.stepCount; i++) {
+      const t = (i + 0.5) / zone.stepCount;
+      const stepCx = sx + dx * t;
+      const stepCz = sz + dz * t;
+      const stepY = (i + 0.5) * zone.stepHeight;
+      const step = new THREE.Mesh(
+        new THREE.BoxGeometry(zone.width, zone.stepHeight, stepLen),
+        gdStairMat,
+      );
+      step.position.set(stepCx, stepY, stepCz);
+      step.rotation.y = yaw;
+      step.castShadow = true;
+      step.receiveShadow = true;
+      group.add(step);
+    }
+  }
+}
+
+// Subtle low-poly grass patches at scene level. Positions are in
+// LOCAL plan-centred coords; building bbox is roughly x:[-25,+5],
+// z:[-21,+3], so every patch below sits outside that envelope.
+function addGroundGrassPatches(root) {
+  const PATCHES = [
+    // [x, z, radius, materialIndex]
+    [ 16, -14, 2.4, 0],
+    [ 19,  -6, 1.8, 1],
+    [ 14,   4, 2.2, 2],
+    [ 22,   8, 1.6, 0],
+    [  2,  20, 2.5, 1],
+    [-10,  19, 1.9, 2],
+    [-20,  12, 2.3, 0],
+    [-32,  -8, 2.0, 1],
+    [-30,   8, 2.2, 2],
+    [-25, -23, 1.7, 0],
+    [  8, -20, 2.4, 1],
+    [ -5, -28, 1.9, 2],
+    [ 11,  22, 2.1, 0],
+    [ 22, -10, 1.8, 2],
+  ];
+  for (const [x, z, r, mIdx] of PATCHES) {
+    const patch = new THREE.Mesh(
+      new THREE.CircleGeometry(r, 8),
+      gdGrassPatchMats[mIdx],
+    );
+    patch.rotation.x = -Math.PI / 2;
+    patch.position.set(x, 0.002, z);
+    patch.receiveShadow = true;
+    root.add(patch);
   }
 }
 
