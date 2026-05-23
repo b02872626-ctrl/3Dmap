@@ -1015,7 +1015,6 @@ start(() => {
   updateFly();
   updateViewMorph();
   routeLayer.animate();
-  updateXray();
 });
 
 // ====================================================================
