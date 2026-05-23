@@ -413,11 +413,15 @@ const BUILDING_LIST = [
   },
 ];
 
+const DEFAULT_BUILDING_ID = "aba-jifar";
+
 function resolveActiveBuilding() {
-  // No window in non-browser env (build tools) — default to first.
-  if (typeof window === "undefined") return BUILDING_LIST[0];
+  const fallback =
+    BUILDING_LIST.find((b) => b.id === DEFAULT_BUILDING_ID) ?? BUILDING_LIST[0];
+  // No window in non-browser env (build tools) — default to fallback.
+  if (typeof window === "undefined") return fallback;
   const id = new URLSearchParams(window.location.search).get("building");
-  return BUILDING_LIST.find((b) => b.id === id) ?? BUILDING_LIST[0];
+  return BUILDING_LIST.find((b) => b.id === id) ?? fallback;
 }
 
 const ACTIVE = resolveActiveBuilding();
