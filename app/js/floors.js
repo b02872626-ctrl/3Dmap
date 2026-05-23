@@ -1242,8 +1242,25 @@ function edgeKey(a, b) {
   return r1 < r2 ? `${r1}|${r2}` : `${r2}|${r1}`;
 }
 
-// Place a row of windows along every external wall edge. Windows face
-// outward (computed from the polygon centroid → edge midpoint). Edges
+// Signed area of a 2D polygon in XZ. Sign indicates winding (positive
+// or negative depending on convention) — combined with a +90° edge
+// rotation it gives a true edge-perpendicular outward normal, which is
+// what window panes need to sit flush against their wall.
+function polygonSignedArea2D(poly) {
+  let s = 0;
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const [x1, z1] = poly[i];
+    const [x2, z2] = poly[(i + 1) % n];
+    s += x1 * z2 - x2 * z1;
+  }
+  return s / 2;
+}
+
+// Place a row of windows along every external wall edge. The outward
+// normal is the edge-perpendicular flipped to point away from the
+// polygon centroid, so the window plane is coplanar with the wall
+// face on both rectangular and irregular (U-shape) footprints. Edges
 // shared with another room's polygon (internal walls inside a single
 // building) are skipped.
 function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges) {
@@ -1255,6 +1272,11 @@ function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, 
   cx /= polygonLocal.length;
   cz /= polygonLocal.length;
 
+  // Winding sign — used to pick which 90° rotation of the edge points
+  // outward. For the room polygons in this project the same sign holds
+  // for every edge of a given polygon, so we compute it once.
+  const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
+
   for (let i = 0; i < polygonLocal.length; i++) {
     const [ax, az] = polygonLocal[i];
     const [bx, bz] = polygonLocal[(i + 1) % polygonLocal.length];
@@ -1264,12 +1286,13 @@ function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, 
     // Skip internal walls (shared with another room's polygon).
     if (sharedEdges && sharedEdges.has(edgeKey(room.polygon[i], room.polygon[(i + 1) % room.polygon.length]))) continue;
 
-    const midX = (ax + bx) / 2, midZ = (az + bz) / 2;
-    const outDx = midX - cx, outDz = midZ - cz;
-    const outDist = Math.hypot(outDx, outDz);
-    if (outDist < 0.01) continue;
-    const nx = outDx / outDist;
-    const nz = outDz / outDist;
+    // Edge-perpendicular outward normal. (ez, -ex) rotated by winding
+    // sign so it points away from the polygon interior. This is the
+    // TRUE perpendicular of the wall edge — using the radial direction
+    // (mid - centroid) tilts the window plane off the wall on
+    // irregular footprints like the palace block or U-shape.
+    const nx = (ez / edgeLen) * areaSign;
+    const nz = (-ex / edgeLen) * areaSign;
     const wallAngle = Math.atan2(nx, nz);
 
     const margin = 0.5;
@@ -1296,10 +1319,10 @@ function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
   if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
   const doorY = wallsBaseY + LP_DOOR_H / 2;
 
-  let cx = 0, cz = 0;
-  for (const [lx, lz] of polygonLocal) { cx += lx; cz += lz; }
-  cx /= polygonLocal.length;
-  cz /= polygonLocal.length;
+  // Winding sign — used to pick which 90° rotation of each edge points
+  // outward from the polygon interior. See buildLowPolyWindows for the
+  // longer explanation.
+  const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
 
   for (const door of doors) {
     const wx = offsetX(door.x);
@@ -1329,11 +1352,10 @@ function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
     if (edgeLen < 0.001) continue;
     const ux = ex / edgeLen, uz = ez / edgeLen;
 
-    // Outward normal — from edge midpoint, pointing away from centroid.
-    const midX = (ax + bx) / 2, midZ = (az + bz) / 2;
-    let nx = midX - cx, nz = midZ - cz;
-    const nLen = Math.hypot(nx, nz) || 1;
-    nx /= nLen; nz /= nLen;
+    // Edge-perpendicular outward normal — same convention as the
+    // windows so the door panel sits flush against the wall.
+    const nx = (ez / edgeLen) * areaSign;
+    const nz = (-ex / edgeLen) * areaSign;
     const wallAngle = Math.atan2(nx, nz);
 
     // Position the door panel on the wall (small outward offset so the
