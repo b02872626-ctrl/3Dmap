@@ -200,8 +200,9 @@ const ABA_CATEGORIES = {
 const ABA_FLOORS = [
   { id: 1, label: "Ground Floor", y: 0, height: 4.5, fbx: null,
     mapTexture: "assets/aba-jifar-ground.svg" },
-  { id: 2, label: "First Floor",  y: 6, height: 4.5, fbx: null,
-    mapTexture: "assets/aba-jifar-first.svg" },
+  // First floor — no underlying SVG plan; only the extruded room
+  // blocks are rendered, floating at floor.y over the void.
+  { id: 2, label: "First Floor",  y: 6, height: 4.5, fbx: null },
 ];
 
 const aj = (id, name, category, x, z, w, d, floor, extra = {}) => ({
@@ -239,7 +240,8 @@ const ABA_ROOMS = [
 
   // Free-standing pavilions
   aj("19", "Women's Role in the Kingdom",              "womens",     35.10,  4.50, 4.86, 4.02, 1),
-  aj("20", "Banquet Hall",                             "ceremonial", 53.70, 40.80, 8.70, 4.62, 1),
+  // Banquet Hall (room 20) removed — was off in the south plaza far
+  // from the rest of the compound.
 
   // ============ First Floor (2) ============
 
@@ -279,31 +281,103 @@ const ABA_PLAN_BOUNDS = { minX: 0, maxX: 71.44, minZ: 0, maxZ: 49.82 };
 // label is human-friendly for direction steps.
 const ABA_ROAD_LABELS = {
   "road-1": "South plaza",
-  "road-2": "Banquet path",
   "road-3": "Central path",
-  "road-4": "East approach",
   "road-5": "East gate",
 };
-const ABA_ROADS = abaJifarRoomData.roads.map((r) => ({
-  id:     r.id,
-  x:      r.bbox[0],
-  z:      r.bbox[1],
-  w:      r.bbox[2],
-  d:      r.bbox[3],
-  points: r.points,
-  color:  0x4a443c,
-  label:  ABA_ROAD_LABELS[r.id] ?? r.id,
-}));
+// Roads leading to the now-removed Banquet Hall (south + east spurs)
+// are filtered out — they're orphaned without that destination.
+const ABA_DROPPED_ROADS = new Set(["road-2", "road-4"]);
+const ABA_ROADS = abaJifarRoomData.roads
+  .filter((r) => !ABA_DROPPED_ROADS.has(r.id))
+  .map((r) => ({
+    id:     r.id,
+    x:      r.bbox[0],
+    z:      r.bbox[1],
+    w:      r.bbox[2],
+    d:      r.bbox[3],
+    points: r.points,
+    color:  0x4a443c,
+    label:  ABA_ROAD_LABELS[r.id] ?? r.id,
+  }));
 
 // Doors extracted from the SVG's door-swing arcs (see build script).
 // Each door has a world position and a list of attached room ids (1-2).
-const ABA_DOORS = (abaJifarRoomData.doors || []).map((d) => ({
-  id:    d.id,
-  x:     d.pos[0],
-  z:     d.pos[1],
-  floor: 1,
-  rooms: d.rooms,
-}));
+// Filter out doors whose only attached rooms have been removed from
+// ABA_ROOMS (otherwise they'd render as orphaned gold pins floating in
+// the grass where the removed building used to be).
+const ABA_ROOM_IDS = new Set(ABA_ROOMS.map((r) => r.id));
+const ABA_DOORS = (abaJifarRoomData.doors || [])
+  .filter((d) => d.rooms && d.rooms.some((rid) => ABA_ROOM_IDS.has(rid)))
+  .map((d) => ({
+    id:    d.id,
+    x:     d.pos[0],
+    z:     d.pos[1],
+    floor: 1,
+    rooms: d.rooms,
+  }));
+
+// =============================================================
+//  Outdoor waypoint network — hand-coded from the user's sketch of
+//  "Possible Navigation Routes" on the ground floor. These are the
+//  junction points along the painted paved walkways; doors connect
+//  to the nearest waypoint, waypoints connect to adjacent waypoints,
+//  and the path-finder routes ROOM → door → waypoint → … → waypoint
+//  → door → ROOM. Cross-building line-of-sight is disabled so all
+//  inter-building paths must go through this network.
+// =============================================================
+const ABA_WAYPOINTS = [
+  // ① Main Entrance — south spine origin
+  { id: "wp-main-entrance", x: 14.5, z: 33.0, floor: 1, label: "Main Entrance", major: true, stop: 1 },
+
+  // Palace south-side approach (between Main Entrance and Mosque)
+  { id: "wp-palace-front",  x: 17.0, z: 23.0, floor: 1, label: "Palace front" },
+
+  // Mosque (the Religion-pavilion stop on the spine)
+  { id: "wp-mosque",        x: 18.5, z: 26.0, floor: 1, label: "Mosque" },
+
+  // ② Central Hub — decision point between palace, mosque, and big building
+  { id: "wp-central-hub",   x: 19.5, z: 19.5, floor: 1, label: "Central Hub", major: true, stop: 2 },
+
+  // Courtyard Open Space — between Central Hub and Exhibit Building
+  { id: "wp-courtyard",     x: 24.0, z: 14.5, floor: 1, label: "Courtyard Open Space" },
+
+  // Exhibit Building 2 (large building – southern entry junction)
+  { id: "wp-exhibit",       x: 27.0, z: 12.5, floor: 1, label: "Exhibit Building 2" },
+
+  // Geda System Exhibit — west annex
+  { id: "wp-geda",          x: 21.5, z: 12.5, floor: 1, label: "Geda System Exhibit" },
+
+  // East side of exhibit building (junction toward State Formation)
+  { id: "wp-exhibit-east",  x: 33.0, z: 11.5, floor: 1, label: "Exhibit east junction" },
+
+  // State Formation Gallery (Women's Role pavilion location)
+  { id: "wp-state-formation", x: 37.5, z: 10.0, floor: 1, label: "State Formation Gallery" },
+
+  // Banquet Hall route + waypoints removed along with room 20.
+];
+
+// Edges that mirror the "Possible Navigation Routes" reference. Third
+// element classifies the line so floors.js can render it with the
+// matching weight / dash style:
+//   "primary"   — thick orange spine
+//   "secondary" — thinner connector
+//   "return"    — dashed recommended-return loop
+const ABA_WAYPOINT_EDGES = [
+  // Primary spine, south → north (Main Entrance → Central Hub → Exhibit Building 2)
+  ["wp-main-entrance", "wp-palace-front",     "primary"],
+  ["wp-palace-front",  "wp-central-hub",      "primary"],
+  ["wp-central-hub",   "wp-courtyard",        "primary"],
+  ["wp-courtyard",     "wp-exhibit",          "primary"],
+
+  // Primary east loop on the upper building (Exhibit → State Formation)
+  ["wp-exhibit",       "wp-exhibit-east",     "primary"],
+  ["wp-exhibit-east",  "wp-state-formation",  "primary"],
+
+  // Secondary connectors around the central hub
+  ["wp-central-hub",   "wp-mosque",           "secondary"],
+  ["wp-palace-front",  "wp-mosque",           "secondary"],
+  ["wp-exhibit",       "wp-geda",             "secondary"],
+];
 
 // =============================================================
 //  Building registry + active-building selector
@@ -334,6 +408,8 @@ const BUILDING_LIST = [
     planBounds: ABA_PLAN_BOUNDS,
     roads:      [],                  // road slabs replaced by visibility paths between doors
     doors:      ABA_DOORS,           // door positions extracted from SVG arc symbols
+    waypoints:  ABA_WAYPOINTS,       // outdoor walking-network junction nodes
+    waypointEdges: ABA_WAYPOINT_EDGES,
   },
 ];
 
@@ -354,6 +430,8 @@ export const ROOMS       = ACTIVE.rooms;
 export const PLAN_BOUNDS = ACTIVE.planBounds;
 export const ROADS       = ACTIVE.roads ?? [];
 export const DOORS       = ACTIVE.doors ?? [];
+export const WAYPOINTS   = ACTIVE.waypoints ?? [];
+export const WAYPOINT_EDGES = ACTIVE.waypointEdges ?? [];
 
 // New: lets the UI render the building selector and current branding.
 export const BUILDINGS         = BUILDING_LIST;

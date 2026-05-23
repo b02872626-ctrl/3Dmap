@@ -40,8 +40,11 @@ const graph = buildGraph();
 const routeLayer = createRouteLayer(scene, floorGroups);
 
 // ---------------- Floor visibility / explode ----------------
-const FLOOR_GAP = 7;     // base stack
-const EXPLODE_GAP = 13;  // exploded stack
+// Base stack — equal to SITUM_BLOCK_HEIGHT (1.6) so floor 2's wall
+// bottom lines up exactly with floor 1's wall top, making the buildings
+// read as continuous two-storey structures.
+const FLOOR_GAP = 1.6;
+const EXPLODE_GAP = 7;   // exploded stack — pull floors apart for clarity
 
 let activeFloor = 1; // default view: ground floor
 let exploded = false;
@@ -396,7 +399,10 @@ document.getElementById("toggle-explode").addEventListener("click", (e) => {
 });
 
 document.getElementById("reset-cam").addEventListener("click", () => {
-  flyTo(new THREE.Vector3(0, 4, 0), 1.0, 60);
+  // Drop the persisted view and fly back to the auto-framed default
+  // for the active building.
+  try { localStorage.removeItem(CAM_STORAGE_KEY); } catch {}
+  frameInitialView(true);
 });
 
 // ---------------- Legend / category filter ----------------
@@ -561,7 +567,59 @@ document.addEventListener("click", (e) => {
 // ---------------- Init layout, then start ----------------
 applyFloorLayout();
 applyCategoryFilter();
-frameInitialView();
+
+// Camera view persistence — remembers whatever view the user lands on
+// after pan/zoom for the active building, and restores it on next load.
+// Floor selection + iso-vs-top is persisted too. Use the "reset camera"
+// button (⟲) to clear the saved view and fall back to the auto-frame.
+const CAM_STORAGE_KEY = `cam-view-${ACTIVE_BUILDING.id}`;
+function saveCameraView() {
+  try {
+    localStorage.setItem(CAM_STORAGE_KEY, JSON.stringify({
+      zoom:        camera.zoom,
+      target:      { x: controls.target.x, y: controls.target.y, z: controls.target.z },
+      activeFloor: activeFloor,
+      viewMode:    viewMode,
+    }));
+  } catch {}
+}
+function restoreCameraView() {
+  let saved;
+  try {
+    const raw = localStorage.getItem(CAM_STORAGE_KEY);
+    if (!raw) return false;
+    saved = JSON.parse(raw);
+  } catch { return false; }
+  if (!saved || typeof saved.zoom !== "number") return false;
+
+  // Restore floor selection first so layout positions Y correctly.
+  if (saved.activeFloor !== undefined && saved.activeFloor !== activeFloor) {
+    activeFloor = saved.activeFloor;
+    const v = String(activeFloor);
+    document.querySelectorAll(".floor-switcher [data-floor]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.floor === v));
+    document.querySelectorAll("[data-mobile-floor]").forEach((b) =>
+      b.classList.toggle("active", b.dataset.mobileFloor === v));
+    applyFloorLayout();
+  }
+  if (saved.viewMode && saved.viewMode !== viewMode) {
+    setViewMode(saved.viewMode);
+  }
+  controls.target.set(saved.target.x, saved.target.y, saved.target.z);
+  camera.zoom = saved.zoom;
+  camera.position.copy(controls.target).add(_viewOffset);
+  camera.updateProjectionMatrix();
+  controls.update();
+  return true;
+}
+// Debounced save on any camera change.
+let _saveTimeout = null;
+controls.addEventListener("change", () => {
+  clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(saveCameraView, 800);
+});
+// On load: try restore, else use auto-frame default.
+if (!restoreCameraView()) frameInitialView();
 
 function frameInitialView(animate = false) {
   // Compute the actual room-cluster bounds on the currently-visible floors,

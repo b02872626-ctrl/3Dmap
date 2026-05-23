@@ -114,30 +114,37 @@ export function createScene(canvas) {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  const haloCanvas = document.createElement("canvas");
-  haloCanvas.width = haloCanvas.height = 256;
-  const hctx = haloCanvas.getContext("2d");
-  const grad = hctx.createRadialGradient(128, 128, 30, 128, 128, 128);
-  grad.addColorStop(0,   "rgba(0,0,0,0.55)");
-  grad.addColorStop(0.6, "rgba(0,0,0,0.15)");
-  grad.addColorStop(1,   "rgba(0,0,0,0)");
-  hctx.fillStyle = grad;
-  hctx.fillRect(0, 0, 256, 256);
-  const haloTex = new THREE.CanvasTexture(haloCanvas);
-  haloTex.colorSpace = THREE.SRGBColorSpace;
-  const halo = new THREE.Mesh(
-    new THREE.PlaneGeometry(160, 160),
-    new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false }),
-  );
-  halo.rotation.x = -Math.PI / 2;
-  halo.position.set(0, 0.005, 0);
-  scene.add(halo);
+  // Faux-ambient halo disabled — the radial gradient drew a dark
+  // shadow ring around the buildings on top of the SVG floor. The
+  // architectural drawing already conveys depth; restore by
+  // uncommenting if you need the vignette back.
+  // const haloCanvas = document.createElement("canvas");
+  // haloCanvas.width = haloCanvas.height = 256;
+  // const hctx = haloCanvas.getContext("2d");
+  // const grad = hctx.createRadialGradient(128, 128, 30, 128, 128, 128);
+  // grad.addColorStop(0,   "rgba(0,0,0,0.55)");
+  // grad.addColorStop(0.6, "rgba(0,0,0,0.15)");
+  // grad.addColorStop(1,   "rgba(0,0,0,0)");
+  // hctx.fillStyle = grad;
+  // hctx.fillRect(0, 0, 256, 256);
+  // const haloTex = new THREE.CanvasTexture(haloCanvas);
+  // haloTex.colorSpace = THREE.SRGBColorSpace;
+  // const halo = new THREE.Mesh(
+  //   new THREE.PlaneGeometry(160, 160),
+  //   new THREE.MeshBasicMaterial({ map: haloTex, transparent: true, depthWrite: false }),
+  // );
+  // halo.rotation.x = -Math.PI / 2;
+  // halo.position.set(0, 0.005, 0);
+  // scene.add(halo);
 
-  const grid = new THREE.GridHelper(260, 130, 0x1c2330, 0x141a22);
-  grid.position.set(0, 0, 0);
-  grid.material.transparent = true;
-  grid.material.opacity = 0.18;
-  scene.add(grid);
+  // Debug grid disabled — it sits at Y=0 (same plane as the SVG floor
+  // texture) and shows through as vertical/horizontal stripes. Restore
+  // by uncommenting if you need a measurement grid back.
+  // const grid = new THREE.GridHelper(260, 130, 0x1c2330, 0x141a22);
+  // grid.position.set(0, -0.01, 0);
+  // grid.material.transparent = true;
+  // grid.material.opacity = 0.18;
+  // scene.add(grid);
 
   // ---------------- Resize ----------------
   window.addEventListener("resize", () => {

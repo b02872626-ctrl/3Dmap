@@ -14,6 +14,15 @@ const PATH_COLOR     = 0xff4d6a;   // brand magenta
 const PATH_ACCENT    = 0xfff4b3;   // arrow yellow
 const START_COLOR    = 0x4ade80;   // green
 const END_COLOR      = 0xff4d6a;   // magenta
+// Route renders just above the outdoor path strips (floors.js PATH_LIFT
+// ≈ 0.12, PATH_THICK ≈ 0.06 → road top at y ≈ 0.15). Keep route pieces
+// hugging the floor so they read like a painted route, not a hovering
+// tube above the painted paths.
+const ROUTE_Y_TUBE   = 0.22;
+const ROUTE_Y_ARROW  = 0.30;
+const ROUTE_Y_DISC   = 0.20;
+const ROUTE_Y_MARKER = 0.18;
+const ROUTE_Y_STEP   = 0.35;
 
 export function createRouteLayer(scene, floorGroups) {
   const root = new THREE.Group();
@@ -63,7 +72,7 @@ export function createRouteLayer(scene, floorGroups) {
         segments.push(cur);
         cur = { floor: n.floor, points: [] };
       }
-      cur.points.push(new THREE.Vector3(n.x, 0.25, n.z));
+      cur.points.push(new THREE.Vector3(n.x, ROUTE_Y_TUBE, n.z));
     }
     segments.push(cur);
 
@@ -139,7 +148,7 @@ export function createRouteLayer(scene, floorGroups) {
       const pos = curve.getPointAt(t);
       const tangent = curve.getTangentAt(t).normalize();
       const arrow = makeArrow();
-      arrow.position.set(pos.x, 0.45, pos.z);
+      arrow.position.set(pos.x, ROUTE_Y_ARROW, pos.z);
       arrow.rotation.y = Math.atan2(tangent.x, tangent.z);
       arrow.userData.isRoute = true;
       fg.add(arrow);
@@ -155,7 +164,7 @@ export function createRouteLayer(scene, floorGroups) {
       new THREE.MeshBasicMaterial({ color: PATH_COLOR, transparent: true, opacity: 0.5, depthWrite: false })
     );
     disc.rotation.x = -Math.PI / 2;
-    disc.position.set(p.x, 0.16, p.z);
+    disc.position.set(p.x, ROUTE_Y_DISC, p.z);
     disc.userData.isRoute = true;
     fg.add(disc);
   }
@@ -199,7 +208,7 @@ export function createRouteLayer(scene, floorGroups) {
     const fg = floorGroups.get(node.floor);
     if (!fg) return;
     const m = makeMarker(color);
-    m.position.set(node.x, 0.12, node.z);
+    m.position.set(node.x, ROUTE_Y_MARKER, node.z);
     m.userData.isRoute = true;
     m.userData.kind = kind;
     fg.add(m);
@@ -265,7 +274,7 @@ export function createRouteLayer(scene, floorGroups) {
         marker.rotation.y = step.bearing;
       }
     }
-    marker.position.set(step.startX, 0.55, step.startZ);
+    marker.position.set(step.startX, ROUTE_Y_STEP, step.startZ);
     marker.userData.isRoute = true;
     marker.userData.isStepArrow = true;
     fg.add(marker);
