@@ -796,13 +796,12 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2) {
     polygonLocal = [[x1, z1], [x2, z1], [x2, z2], [x1, z2]];
   }
 
-  // Every floor-1 room uses short open-top walls (no roof on ground
-  // floor). Floor-2 rooms get tall closed walls + a hip roof on top —
-  // they sit on the ground-floor walls and read as a proper second
-  // storey with its own pitched roof.
-  const isFloor1 = room.floor === 1;
-  const hasFloor2Above = isFloor1; // every floor-1 room is open-top
-  const isStandaloneRoofed = !isFloor1;
+  // Every room — ground and upper floor alike — uses short open-top
+  // walls. The colored interior tile is visible from above on both
+  // levels and no roofs are drawn, giving the model a clean stacked-
+  // box look.
+  const hasFloor2Above = true;
+  const isStandaloneRoofed = false;
 
   // --- Foundation plinth (slight step at the base) ---
   const foundationPoly = offsetPolygonOutward(polygonLocal, LP_FOUNDATION_OUT);
