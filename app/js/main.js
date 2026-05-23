@@ -355,6 +355,9 @@ function setViewMode(mode) {
     toUp:    targetUp.clone(),
     t: 0, dur: 55,
   };
+  // Top view = orbit lock. Iso view = orbit free. This kicks in as soon
+  // as the morph starts so the user can't rotate mid-flip.
+  controls.enableRotate = mode !== "top";
 }
 
 function updateViewMorph() {
