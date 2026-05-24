@@ -1010,7 +1010,7 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   }
 
   // --- Windows on external walls + dark door panels at door positions ---
-  buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges);
+  buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges, doorsForRoom);
   if (room.floor === 1 && doorsForRoom.length) {
     buildLowPolyDoors(group, polygonLocal, wallsBaseY, doorsForRoom);
   }
@@ -1294,7 +1294,7 @@ function polygonSignedArea2D(poly) {
 // face on both rectangular and irregular (U-shape) footprints. Edges
 // shared with another room's polygon (internal walls inside a single
 // building) are skipped.
-function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges) {
+function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges, doorsForRoom = []) {
   if (!Array.isArray(room.polygon)) return;
   const windowY = wallsBaseY + wallHeight * 0.58;
 
@@ -1307,6 +1307,15 @@ function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, 
   // outward. For the room polygons in this project the same sign holds
   // for every edge of a given polygon, so we compute it once.
   const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
+
+  // Door positions on this room — used to suppress windows that would
+  // otherwise be stamped behind a door panel on the same wall. Window
+  // half-width 0.275 + door half-width 0.35 + small visual gap → ~0.8m
+  // centre-to-centre clearance keeps the panels from overlapping.
+  const doorPositions = (doorsForRoom || []).map(
+    (d) => [offsetX(d.x), offsetZ(d.z)],
+  );
+  const WINDOW_DOOR_CLEARANCE = 0.80;
 
   for (let i = 0; i < polygonLocal.length; i++) {
     const [ax, az] = polygonLocal[i];
@@ -1336,6 +1345,15 @@ function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, 
       const t = margin + usable * (j + 0.5) / count;
       const wx = ax + ux * t + nx * 0.04;
       const wz = az + uz * t + nz * 0.04;
+      // Skip if a door panel sits on this wall at roughly the same
+      // position — otherwise the window shows through behind the door.
+      let nearDoor = false;
+      for (const [dx, dz] of doorPositions) {
+        if (Math.hypot(dx - wx, dz - wz) < WINDOW_DOOR_CLEARANCE) {
+          nearDoor = true; break;
+        }
+      }
+      if (nearDoor) continue;
       group.add(buildWindowPanel(wx, windowY, wz, wallAngle));
     }
   }
