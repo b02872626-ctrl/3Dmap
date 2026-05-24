@@ -772,7 +772,7 @@ const TERRAIN_PLAZA     = 0xd9cba8;   // light sand plaza
 // Atmosphere — sparse trees in the open landscape around the compound.
 // Flip to false to remove all decoration if frame-rate drops or you
 // just want a clean diagram.
-const LANDSCAPE_DECOR   = true;
+const LANDSCAPE_DECOR   = false;
 
 const lpWallMat = new THREE.MeshStandardMaterial({
   color: LP_WALL_COLOR, roughness: 0.85, metalness: 0, flatShading: true,
@@ -1915,7 +1915,7 @@ const SHOW_GROUND_DETAILS   = true;
 const SHOW_PAVING_LINES     = true;
 const SHOW_CURBS            = true;
 const SHOW_STAIR_DETAILS    = true;
-const SHOW_GRASS_VARIATION  = true;
+const SHOW_GRASS_VARIATION  = false;
 
 // Tile grid on platforms
 const GD_TILE_SIZE          = 1.60;   // metres — distance between grout lines
