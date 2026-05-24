@@ -839,10 +839,49 @@ function buildSitePlaza() {
   return plaza;
 }
 
+// Hand-defined grass cut-outs sitting on top of the plaza. Each entry
+// is a polygon in RAW plan coords; the patch is extruded slightly
+// above the plaza top so it reads as a lawn opening in the paving.
+// Adjust / extend this array to add or move patches.
+const PLAZA_GRASS_PATCHES = [
+  // 1. NW open area — north of palace, west of central cluster
+  [[ 8.0,  2.0], [21.0,  2.0], [21.0,  9.5],
+   [17.5, 9.5], [17.5, 12.5], [ 8.0, 12.5]],
+
+  // 2. East strip — between central cluster east edge and plaza east
+  [[34.0, 11.5], [48.0, 11.5], [48.0, 31.0], [34.0, 31.0]],
+
+  // 3. South strip — well south of the south spine
+  [[18.0, 34.5], [48.0, 34.5], [48.0, 38.0], [18.0, 38.0]],
+
+  // 4. SW patch — between palace platform and plaza SW corner
+  [[ 3.0, 28.0], [ 8.0, 28.0], [ 8.0, 38.0], [ 3.0, 38.0]],
+];
+
+function addPlazaGrassPatches(group) {
+  const grassMat = new THREE.MeshStandardMaterial({
+    color: TERRAIN_GRASS, roughness: 1.0, metalness: 0, flatShading: true,
+  });
+  const topY = PLATFORM_Y + PLATFORM_H + 0.005;  // just above plaza top
+  for (const polygon of PLAZA_GRASS_PATCHES) {
+    if (!Array.isArray(polygon) || polygon.length < 3) continue;
+    const polyLocal = polygon.map(([x, z]) => [
+      x - planCenter.x,
+      z - planCenter.z,
+    ]);
+    const patch = buildExtrudedPolygon(polyLocal, 0.02, grassMat);
+    patch.position.y = topY;
+    patch.receiveShadow = true;
+    group.add(patch);
+  }
+}
+
 function addOutdoorTerrain(group) {
   // Start with the big site plaza (one rectangle covering the entire
-  // compound), then layer per-building platforms + details on top.
+  // compound), then layer per-building platforms + grass cut-outs +
+  // details on top.
   group.add(buildSitePlaza());
+  addPlazaGrassPatches(group);
   // Grass plane lives at scene level (added in buildFloors), so it
   // shows under every floor regardless of which one is filtered. Here
   // we only add the per-building paved platforms — floor-1 only.
