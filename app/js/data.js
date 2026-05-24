@@ -326,36 +326,50 @@ const ABA_DOORS = (abaJifarRoomData.doors || [])
 //  inter-building paths must go through this network.
 // =============================================================
 const ABA_WAYPOINTS = [
+  // ============ Major numbered stops ============
   // ① Main Entrance — south spine origin
   { id: "wp-main-entrance", x: 14.5, z: 33.0, floor: 1, label: "Main Entrance", major: true, stop: 1 },
+  // ② Central Hub — decision point between palace, mosque, and big building
+  { id: "wp-central-hub",   x: 19.5, z: 19.5, floor: 1, label: "Central Hub",   major: true, stop: 2 },
 
-  // Mosque — moved south-east of the Religion pavilion so the spine
-  // skirts the building instead of cutting through it.
+  // ============ Religion pavilion loop ============
+  // Corners of the corridor that wraps around Religion (room 5,
+  // bbox x:13.86-17.70 z:24.48-27.42) on its west, north, east sides.
+  { id: "wp-religion-w",    x: 12.8, z: 27.5, floor: 1, label: "Religion west" },
+  { id: "wp-religion-nw",   x: 12.8, z: 23.5, floor: 1, label: "Religion NW corner" },
+  { id: "wp-religion-ne",   x: 18.5, z: 23.5, floor: 1, label: "Religion NE corner" },
   { id: "wp-mosque",        x: 19.5, z: 27.5, floor: 1, label: "Mosque" },
 
+  // ============ Palace approach ============
   // Palace south-side approach (between Mosque and Central Hub)
   { id: "wp-palace-front",  x: 17.0, z: 23.0, floor: 1, label: "Palace front" },
 
-  // ② Central Hub — decision point between palace, mosque, and big building
-  { id: "wp-central-hub",   x: 19.5, z: 19.5, floor: 1, label: "Central Hub", major: true, stop: 2 },
+  // ============ Central cluster perimeter ============
+  // Open corridor west of the central cluster, near room 16's west edge.
+  { id: "wp-cluster-w",     x: 21.0, z: 12.5, floor: 1, label: "Cluster west" },
+  // NW corner — north of room 16, west of room 16. Lets the path bend
+  // along z=4 without cutting through room 16 (z:4.74-9.84).
+  { id: "wp-cluster-nw",    x: 21.0, z:  4.0, floor: 1, label: "Cluster NW corner" },
+  // North corridor running across the top of room 18 (z:4.92-12.54).
+  { id: "wp-cluster-n",     x: 28.0, z:  4.0, floor: 1, label: "Cluster north" },
+  // NE corner — east of room 18, north of Women's Role (z:4.50-8.52).
+  { id: "wp-cluster-ne",    x: 33.5, z:  4.0, floor: 1, label: "Cluster NE corner" },
+  // East corridor running down between the central cluster (east edge
+  // 32.34) and Women's Role pavilion (west edge 35.10).
+  { id: "wp-cluster-e",     x: 33.5, z:  8.5, floor: 1, label: "Cluster east" },
+  // SW corner — south of Gibe Kingdom (z:13.44-16.98), east of palace.
+  { id: "wp-cluster-sw",    x: 21.5, z: 18.5, floor: 1, label: "Cluster SW corner" },
 
-  // Courtyard Open Space — moved east of the central building cluster
-  // (room 18 east edge ≈ 32.34) so the line from Central Hub stays
-  // south of Gibe Kingdom (room 15) and never enters its footprint.
+  // ============ Spine landmark waypoints (east side) ============
+  // Courtyard Open Space — south-east of the central cluster, at the
+  // bend where the south spine turns north into the east corridor.
   { id: "wp-courtyard",     x: 33.0, z: 18.0, floor: 1, label: "Courtyard Open Space" },
-
-  // Geda System Exhibit — west annex (west of Gibe Kingdom, in the
-  // narrow corridor between Construction Method and Gibe).
+  // Geda System Exhibit — west annex (west of Gibe Kingdom).
   { id: "wp-geda",          x: 21.5, z: 12.5, floor: 1, label: "Geda System Exhibit" },
-
-  // Exhibit Building 2 — moved into the east corridor between the
-  // central cluster (east edge 32.34) and Women's Role (west 35.10)
-  // so the spine no longer cuts through Wrestling or Courtyard.
+  // Exhibit Building 2 — east corridor, between central cluster and Women's.
   { id: "wp-exhibit",       x: 33.0, z: 13.0, floor: 1, label: "Exhibit Building 2" },
-
   // East side of exhibit building (junction toward State Formation)
   { id: "wp-exhibit-east",  x: 33.0, z: 11.5, floor: 1, label: "Exhibit east junction" },
-
   // State Formation Gallery (Women's Role pavilion location)
   { id: "wp-state-formation", x: 37.5, z: 10.0, floor: 1, label: "State Formation Gallery" },
 
@@ -369,26 +383,49 @@ const ABA_WAYPOINTS = [
 //   "secondary" — thinner connector
 //   "return"    — dashed recommended-return loop
 //
-// Routes were rerouted to bend around buildings: the south spine now
-// dog-legs through wp-mosque (east of the Religion pavilion) instead
-// of cutting straight up through it, and the east half goes via the
-// open corridor east of the central cluster instead of through Gibe
-// Kingdom and the Courtyard interior.
+// Every edge below was hand-verified to NOT cross a room footprint —
+// each waypoint sits in a paved corridor between buildings, and every
+// segment runs along one of those corridors.
 const ABA_WAYPOINT_EDGES = [
-  // Primary spine, south → north → east
+  // ============ Primary spine ============
+  // Main entrance → mosque (skirts Religion to the south-east) →
+  // palace-front → central-hub → courtyard → exhibit → exhibit-east →
+  // state-formation.
   ["wp-main-entrance", "wp-mosque",           "primary"],
   ["wp-mosque",        "wp-palace-front",     "primary"],
   ["wp-palace-front",  "wp-central-hub",      "primary"],
   ["wp-central-hub",   "wp-courtyard",        "primary"],
   ["wp-courtyard",     "wp-exhibit",          "primary"],
-
-  // Primary east loop on the upper building (Exhibit → State Formation)
   ["wp-exhibit",       "wp-exhibit-east",     "primary"],
   ["wp-exhibit-east",  "wp-state-formation",  "primary"],
 
-  // Secondary connectors
-  ["wp-central-hub",   "wp-mosque",           "secondary"],
+  // ============ Religion loop (secondary) ============
+  // Wraps Religion pavilion on its W / N / E sides so visitors can
+  // approach it from either side of the entrance plaza.
+  ["wp-main-entrance", "wp-religion-w",       "secondary"],
+  ["wp-religion-w",    "wp-religion-nw",      "secondary"],
+  ["wp-religion-nw",   "wp-religion-ne",      "secondary"],
+  ["wp-religion-ne",   "wp-mosque",           "secondary"],
+  ["wp-religion-nw",   "wp-palace-front",     "secondary"],
+
+  // ============ Central cluster perimeter (secondary) ============
+  // West side: hub → SW corner → courtyard runs south of Gibe Kingdom.
+  ["wp-central-hub",   "wp-cluster-sw",       "secondary"],
+  ["wp-cluster-sw",    "wp-courtyard",        "secondary"],
+  // North side: hub → geda → cluster-w → NW → N → NE wraps the top
+  // of room 18 (Courtyard) without cutting through room 16 (Construction).
   ["wp-central-hub",   "wp-geda",             "secondary"],
+  ["wp-geda",          "wp-cluster-w",        "secondary"],
+  ["wp-cluster-w",     "wp-cluster-nw",       "secondary"],
+  ["wp-cluster-nw",    "wp-cluster-n",        "secondary"],
+  ["wp-cluster-n",     "wp-cluster-ne",       "secondary"],
+  // East side: NE → E joins the east corridor at the exhibit spine.
+  ["wp-cluster-ne",    "wp-cluster-e",        "secondary"],
+  ["wp-cluster-e",     "wp-exhibit",          "secondary"],
+  ["wp-cluster-e",     "wp-state-formation",  "secondary"],
+
+  // ============ Existing connectors retained ============
+  ["wp-central-hub",   "wp-mosque",           "secondary"],
   ["wp-exhibit",       "wp-geda",             "secondary"],
 ];
 
