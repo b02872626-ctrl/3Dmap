@@ -839,23 +839,37 @@ function buildSitePlaza() {
   return plaza;
 }
 
+// Border kept between every grass patch and the outer edge of the
+// plaza, so grass never touches the plaza rim. Bump for a wider beige
+// frame.
+const PLAZA_GRASS_BORDER = 1.5;
+const PLAZA_GRASS_W_MIN = SITE_PLAZA.minX + PLAZA_GRASS_BORDER;  //  4.5
+const PLAZA_GRASS_W_MAX = SITE_PLAZA.maxX - PLAZA_GRASS_BORDER;  // 46.5
+const PLAZA_GRASS_N_MIN = SITE_PLAZA.minZ + PLAZA_GRASS_BORDER;  // -0.5
+const PLAZA_GRASS_N_MAX = SITE_PLAZA.maxZ - PLAZA_GRASS_BORDER;  // 36.5
+
 // Hand-defined grass cut-outs sitting on top of the plaza. Each entry
 // is a polygon in RAW plan coords; the patch is extruded slightly
 // above the plaza top so it reads as a lawn opening in the paving.
-// Adjust / extend this array to add or move patches.
+// Adjust / extend this array to add or move patches. All entries
+// honour the PLAZA_GRASS_BORDER above so the plaza always has a
+// beige rim around the lawn.
 const PLAZA_GRASS_PATCHES = [
   // 1. NW open area — north of palace, west of central cluster
   [[ 8.0,  2.0], [21.0,  2.0], [21.0,  9.5],
-   [17.5, 9.5], [17.5, 12.5], [ 8.0, 12.5]],
+   [17.5,  9.5], [17.5, 12.5], [ 8.0, 12.5]],
 
   // 2. East strip — between central cluster east edge and plaza east
-  [[34.0, 11.5], [48.0, 11.5], [48.0, 31.0], [34.0, 31.0]],
+  [[34.0, 11.5], [PLAZA_GRASS_W_MAX, 11.5],
+   [PLAZA_GRASS_W_MAX, 31.0], [34.0, 31.0]],
 
   // 3. South strip — well south of the south spine
-  [[18.0, 34.5], [48.0, 34.5], [48.0, 38.0], [18.0, 38.0]],
+  [[18.0, PLAZA_GRASS_N_MAX - 2.0], [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MAX - 2.0],
+   [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MAX], [18.0, PLAZA_GRASS_N_MAX]],
 
   // 4. SW patch — between palace platform and plaza SW corner
-  [[ 3.0, 28.0], [ 8.0, 28.0], [ 8.0, 38.0], [ 3.0, 38.0]],
+  [[PLAZA_GRASS_W_MIN, 28.0], [8.0, 28.0],
+   [8.0, PLAZA_GRASS_N_MAX], [PLAZA_GRASS_W_MIN, PLAZA_GRASS_N_MAX]],
 ];
 
 function addPlazaGrassPatches(group) {
