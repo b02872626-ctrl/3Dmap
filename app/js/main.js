@@ -46,7 +46,7 @@ const routeLayer = createRouteLayer(scene, floorGroups);
 const FLOOR_GAP = 1.6;
 const EXPLODE_GAP = 7;   // exploded stack — pull floors apart for clarity
 
-let activeFloor = 1; // default view: ground floor
+let activeFloor = "all"; // default view: all floors visible
 let exploded = false;
 
 function applyFloorLayout() {
