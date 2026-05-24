@@ -329,23 +329,29 @@ const ABA_WAYPOINTS = [
   // ① Main Entrance — south spine origin
   { id: "wp-main-entrance", x: 14.5, z: 33.0, floor: 1, label: "Main Entrance", major: true, stop: 1 },
 
-  // Palace south-side approach (between Main Entrance and Mosque)
-  { id: "wp-palace-front",  x: 17.0, z: 23.0, floor: 1, label: "Palace front" },
+  // Mosque — moved south-east of the Religion pavilion so the spine
+  // skirts the building instead of cutting through it.
+  { id: "wp-mosque",        x: 19.5, z: 27.5, floor: 1, label: "Mosque" },
 
-  // Mosque (the Religion-pavilion stop on the spine)
-  { id: "wp-mosque",        x: 18.5, z: 26.0, floor: 1, label: "Mosque" },
+  // Palace south-side approach (between Mosque and Central Hub)
+  { id: "wp-palace-front",  x: 17.0, z: 23.0, floor: 1, label: "Palace front" },
 
   // ② Central Hub — decision point between palace, mosque, and big building
   { id: "wp-central-hub",   x: 19.5, z: 19.5, floor: 1, label: "Central Hub", major: true, stop: 2 },
 
-  // Courtyard Open Space — between Central Hub and Exhibit Building
-  { id: "wp-courtyard",     x: 24.0, z: 14.5, floor: 1, label: "Courtyard Open Space" },
+  // Courtyard Open Space — moved east of the central building cluster
+  // (room 18 east edge ≈ 32.34) so the line from Central Hub stays
+  // south of Gibe Kingdom (room 15) and never enters its footprint.
+  { id: "wp-courtyard",     x: 33.0, z: 18.0, floor: 1, label: "Courtyard Open Space" },
 
-  // Exhibit Building 2 (large building – southern entry junction)
-  { id: "wp-exhibit",       x: 27.0, z: 12.5, floor: 1, label: "Exhibit Building 2" },
-
-  // Geda System Exhibit — west annex
+  // Geda System Exhibit — west annex (west of Gibe Kingdom, in the
+  // narrow corridor between Construction Method and Gibe).
   { id: "wp-geda",          x: 21.5, z: 12.5, floor: 1, label: "Geda System Exhibit" },
+
+  // Exhibit Building 2 — moved into the east corridor between the
+  // central cluster (east edge 32.34) and Women's Role (west 35.10)
+  // so the spine no longer cuts through Wrestling or Courtyard.
+  { id: "wp-exhibit",       x: 33.0, z: 13.0, floor: 1, label: "Exhibit Building 2" },
 
   // East side of exhibit building (junction toward State Formation)
   { id: "wp-exhibit-east",  x: 33.0, z: 11.5, floor: 1, label: "Exhibit east junction" },
@@ -362,9 +368,16 @@ const ABA_WAYPOINTS = [
 //   "primary"   — thick orange spine
 //   "secondary" — thinner connector
 //   "return"    — dashed recommended-return loop
+//
+// Routes were rerouted to bend around buildings: the south spine now
+// dog-legs through wp-mosque (east of the Religion pavilion) instead
+// of cutting straight up through it, and the east half goes via the
+// open corridor east of the central cluster instead of through Gibe
+// Kingdom and the Courtyard interior.
 const ABA_WAYPOINT_EDGES = [
-  // Primary spine, south → north (Main Entrance → Central Hub → Exhibit Building 2)
-  ["wp-main-entrance", "wp-palace-front",     "primary"],
+  // Primary spine, south → north → east
+  ["wp-main-entrance", "wp-mosque",           "primary"],
+  ["wp-mosque",        "wp-palace-front",     "primary"],
   ["wp-palace-front",  "wp-central-hub",      "primary"],
   ["wp-central-hub",   "wp-courtyard",        "primary"],
   ["wp-courtyard",     "wp-exhibit",          "primary"],
@@ -373,9 +386,9 @@ const ABA_WAYPOINT_EDGES = [
   ["wp-exhibit",       "wp-exhibit-east",     "primary"],
   ["wp-exhibit-east",  "wp-state-formation",  "primary"],
 
-  // Secondary connectors around the central hub
+  // Secondary connectors
   ["wp-central-hub",   "wp-mosque",           "secondary"],
-  ["wp-palace-front",  "wp-mosque",           "secondary"],
+  ["wp-central-hub",   "wp-geda",             "secondary"],
   ["wp-exhibit",       "wp-geda",             "secondary"],
 ];
 
