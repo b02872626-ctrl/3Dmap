@@ -362,6 +362,16 @@ function buildSitumFloor(group, floor, roomGroups) {
   // secondary connectors, and dashed recommended-return loop.
   if (floor.id === 1 && WAYPOINTS && WAYPOINTS.length) {
     const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
+    // Beige ground corridors UNDER each path edge — extends the paved
+    // ground along the walking routes so paths never appear to float
+    // on the grass.
+    for (const edge of WAYPOINT_EDGES) {
+      const [aId, bId, type = "primary"] = edge;
+      const a = wpById.get(aId), b = wpById.get(bId);
+      if (!a || !b) continue;
+      const corridor = buildPathGroundCorridor(a, b, type);
+      if (corridor) group.add(corridor);
+    }
     for (const edge of WAYPOINT_EDGES) {
       const [aId, bId, type = "primary"] = edge;
       const a = wpById.get(aId), b = wpById.get(bId);
@@ -430,6 +440,42 @@ const lampHeadMat = new THREE.MeshStandardMaterial({
   color: LAMP_HEAD_COLOR, roughness: 0.4, metalness: 0,
   emissive: LAMP_HEAD_GLOW, emissiveIntensity: 0.6, flatShading: true,
 });
+
+// Beige ground corridor between two waypoints — sits at the same Y
+// level as the building platforms (PLATFORM_Y + PLATFORM_H on top)
+// and is slightly wider than the path strip rendered on top of it.
+// Visually this extends the paved ground along each walk path so the
+// path never appears to spill out onto grass.
+const GROUND_CORRIDOR_MARGIN = 0.70;     // metres extra on each side
+const GROUND_CORRIDOR_THICK  = 0.04;
+function buildPathGroundCorridor(a, b, type = "primary") {
+  const style = PATH_STYLE[type] ?? PATH_STYLE.primary;
+  const ax = offsetX(a.x), az = offsetZ(a.z);
+  const bx = offsetX(b.x), bz = offsetZ(b.z);
+  const dx = bx - ax, dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.05) return null;
+
+  // Extend each end a touch past the waypoint so adjacent corridors
+  // overlap at junctions instead of leaving tiny grass gaps.
+  const overshoot = GROUND_CORRIDOR_MARGIN;
+  const corridorLen = len + overshoot * 2;
+  const corridorW = style.width + GROUND_CORRIDOR_MARGIN * 2;
+
+  const slab = new THREE.Mesh(
+    new THREE.BoxGeometry(corridorLen, GROUND_CORRIDOR_THICK, corridorW),
+    terrainPlazaMat,
+  );
+  slab.position.set(
+    (ax + bx) / 2,
+    PLATFORM_Y + PLATFORM_H - GROUND_CORRIDOR_THICK / 2,
+    (az + bz) / 2,
+  );
+  // Box's long axis is +X; yaw aligns it with the (dx, dz) edge direction.
+  slab.rotation.y = Math.atan2(-dz, dx);
+  slab.receiveShadow = true;
+  return slab;
+}
 
 // 3D box slab from waypoint A to waypoint B. Style hierarchy matches the
 // reference circulation map (primary spine vs secondary connector vs
