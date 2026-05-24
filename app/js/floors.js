@@ -804,7 +804,35 @@ const PLATFORM_PAD = 2.4;   // metres of paving around each building polygon
 const PLATFORM_H   = 0.05;  // slight raise above grass
 const PLATFORM_Y   = 0.02;  // base offset
 
+// Single rectangular site plaza covering the whole compound. Sized
+// to match the outline the user drew on the top-down screenshot.
+// Bounds are in RAW plan coords (same space as room.footprint /
+// waypoint x,z). Tweak any of the four to expand / shrink.
+const SITE_PLAZA = {
+  minX: 3.0,
+  maxX: 48.0,
+  minZ: -2.0,
+  maxZ: 38.0,
+};
+
+function buildSitePlaza() {
+  const w = SITE_PLAZA.maxX - SITE_PLAZA.minX;
+  const d = SITE_PLAZA.maxZ - SITE_PLAZA.minZ;
+  const cx = offsetX((SITE_PLAZA.minX + SITE_PLAZA.maxX) / 2);
+  const cz = offsetZ((SITE_PLAZA.minZ + SITE_PLAZA.maxZ) / 2);
+  const plaza = new THREE.Mesh(
+    new THREE.BoxGeometry(w, PLATFORM_H, d),
+    terrainPlazaMat,
+  );
+  plaza.position.set(cx, PLATFORM_Y + PLATFORM_H / 2, cz);
+  plaza.receiveShadow = true;
+  return plaza;
+}
+
 function addOutdoorTerrain(group) {
+  // Start with the big site plaza (one rectangle covering the entire
+  // compound), then layer per-building platforms + details on top.
+  group.add(buildSitePlaza());
   // Grass plane lives at scene level (added in buildFloors), so it
   // shows under every floor regardless of which one is filtered. Here
   // we only add the per-building paved platforms — floor-1 only.
