@@ -99,7 +99,9 @@ export function buildFloors() {
       terrainGrassMat,
     );
     grassBG.rotation.x = -Math.PI / 2;
-    grassBG.position.set(0, -0.01, 0);
+    // Grass sits a bit below ground so the site plaza reads as a
+    // visibly raised stone block above the surrounding lawn.
+    grassBG.position.set(0, -0.30, 0);
     grassBG.receiveShadow = true;
     grassBG.userData.kind = "grass-bg";
     root.add(grassBG);
@@ -814,17 +816,24 @@ const SITE_PLAZA = {
   minZ: -2.0,
   maxZ: 38.0,
 };
+// Total vertical thickness of the plaza block. Top stays flush with
+// the building-platform top (PLATFORM_Y + PLATFORM_H) so the
+// buildings on it don't need to move; the box just extends DOWN to
+// the lowered grass level so its sides are visible as a raised step.
+const SITE_PLAZA_THICK = 0.35;
 
 function buildSitePlaza() {
   const w = SITE_PLAZA.maxX - SITE_PLAZA.minX;
   const d = SITE_PLAZA.maxZ - SITE_PLAZA.minZ;
   const cx = offsetX((SITE_PLAZA.minX + SITE_PLAZA.maxX) / 2);
   const cz = offsetZ((SITE_PLAZA.minZ + SITE_PLAZA.maxZ) / 2);
+  const topY = PLATFORM_Y + PLATFORM_H;            // 0.07 — buildings still sit here
   const plaza = new THREE.Mesh(
-    new THREE.BoxGeometry(w, PLATFORM_H, d),
+    new THREE.BoxGeometry(w, SITE_PLAZA_THICK, d),
     terrainPlazaMat,
   );
-  plaza.position.set(cx, PLATFORM_Y + PLATFORM_H / 2, cz);
+  plaza.position.set(cx, topY - SITE_PLAZA_THICK / 2, cz);
+  plaza.castShadow = true;
   plaza.receiveShadow = true;
   return plaza;
 }
