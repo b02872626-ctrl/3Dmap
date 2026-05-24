@@ -639,7 +639,10 @@ applyCategoryFilter();
 // after pan/zoom for the active building, and restores it on next load.
 // Floor selection + iso-vs-top is persisted too. Use the "reset camera"
 // button (⟲) to clear the saved view and fall back to the auto-frame.
-const CAM_STORAGE_KEY = `cam-view-${ACTIVE_BUILDING.id}`;
+// Storage key bumped to v2 to invalidate stale saved views from the
+// previous tight-zoom default — visitors now see the looser default
+// instead of being stuck on the old framing.
+const CAM_STORAGE_KEY = `cam-view-${ACTIVE_BUILDING.id}-v2`;
 function saveCameraView() {
   try {
     const offset = camera.position.clone().sub(controls.target);
@@ -730,8 +733,9 @@ function frameInitialView(animate = false, resetOrbit = false) {
   const floorY = floorGroup ? floorGroup.position.y : 0;
 
   const targetVec = new THREE.Vector3(cx, floorY + 3, cz);
-  // Tight default: cluster fills most of the visible frustum
-  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 0.95), 0.85, 2.5);
+  // Looser default: cluster fills ~60% of the visible frustum so the
+  // grass + trees around the compound are visible too.
+  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 1.55), 0.55, 1.5);
   if (animate) {
     flyTo(targetVec, zoom, 55, resetOrbit);
   } else {
