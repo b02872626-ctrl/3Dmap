@@ -241,6 +241,38 @@ html, body {
   box-shadow: 0 6px 16px rgba(255,77,106,0.35);
 }
 
+/* Iso ↔ Top toggle (pill with two segments) */
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(22,27,34,0.85);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px;
+  box-shadow: var(--shadow-lg);
+  user-select: none;
+}
+.view-toggle-option {
+  background: transparent;
+  border: 0;
+  color: var(--text-2);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.18s var(--ease);
+}
+.view-toggle-option:hover { color: var(--text-0); }
+.view-toggle-option.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(255,77,106,0.30);
+}
+.view-toggle-option.active:hover { color: #fff; }
+
 /* ---------- Directions panel ---------- */
 .directions {
   position: fixed;

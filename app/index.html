@@ -25,12 +25,10 @@
       <input id="search-input" type="text" placeholder="Search galleries, amenities…" autocomplete="off" />
       <ul id="search-results"></ul>
     </div>
-    <button id="toggle-view" class="topbar-btn" type="button" title="Switch to top-down view" aria-pressed="false">
-      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-        <path fill="currentColor" d="M4 4h7v7H4V4zm0 9h7v7H4v-7zm9-9h7v7h-7V4zm0 9h7v7h-7v-7z"/>
-      </svg>
-      <span id="view-label">Top View</span>
-    </button>
+    <div id="toggle-view" class="view-toggle" role="group" aria-label="Camera view mode" title="Switch between isometric and top-down view">
+      <button type="button" class="view-toggle-option active" data-mode="iso"  aria-pressed="true">Iso</button>
+      <button type="button" class="view-toggle-option"        data-mode="top"  aria-pressed="false">Top</button>
+    </div>
     <button id="open-directions" class="topbar-btn" title="Get directions">
       <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4zM9 14v-3h4V8.5l3.5 3-3.5 3V14H10v.01z"/></svg>
       <span>Directions</span>

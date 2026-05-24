@@ -551,18 +551,28 @@ document.addEventListener("click", (e) => {
   if (!e.target.closest(".search")) searchResults.classList.remove("open");
 });
 
-// ---------------- View toggle (iso ↔ top) ----------------
+// ---------------- View toggle (Iso ↔ Top pill) ----------------
 (function setupViewToggle() {
-  const btn = document.getElementById("toggle-view");
-  const lbl = document.getElementById("view-label");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    const next = viewMode === "iso" ? "top" : "iso";
-    setViewMode(next);
-    btn.classList.toggle("active", next === "top");
-    btn.setAttribute("aria-pressed", next === "top" ? "true" : "false");
-    btn.title = next === "top" ? "Switch back to isometric view" : "Switch to top-down view";
-    if (lbl) lbl.textContent = next === "top" ? "Iso View" : "Top View";
+  const wrap = document.getElementById("toggle-view");
+  if (!wrap) return;
+  const opts = wrap.querySelectorAll(".view-toggle-option");
+
+  function refresh(mode) {
+    opts.forEach((o) => {
+      const on = o.dataset.mode === mode;
+      o.classList.toggle("active", on);
+      o.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  refresh(viewMode);
+
+  opts.forEach((o) => {
+    o.addEventListener("click", () => {
+      const next = o.dataset.mode;
+      if (!next || next === viewMode) return;
+      setViewMode(next);
+      refresh(next);
+    });
   });
 })();
 
