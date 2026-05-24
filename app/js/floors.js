@@ -777,18 +777,96 @@ const TERRAIN_PLAZA     = 0xd9cba8;   // light sand plaza
 // just want a clean diagram.
 const LANDSCAPE_DECOR   = false;
 
+// ---------------- Procedural textures ----------------
+// Generated once via <canvas>; no asset downloads. Tile freely with
+// RepeatWrapping. Each is a single base color + faint detail (mortar
+// lines on the roof, speckle on the walls) so the materials read as
+// "low-poly with hint of detail" rather than flat colour fills.
+
+function _makeRoofTileTexture() {
+  const c = document.createElement("canvas");
+  c.width  = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d");
+  // Base terracotta
+  ctx.fillStyle = "#b84432";
+  ctx.fillRect(0, 0, 256, 256);
+  // Rows of subtle tile bands — alternating slightly lighter / darker
+  // strips suggest barrel tiles without spending polys.
+  const rows = 12;
+  const h = 256 / rows;
+  for (let r = 0; r < rows; r++) {
+    const y = r * h;
+    const tint = (r % 2 === 0) ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.05)";
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, y, 256, h);
+    // Dark mortar line at the top of each row
+    ctx.fillStyle = "rgba(58, 20, 12, 0.45)";
+    ctx.fillRect(0, y, 256, 1.6);
+  }
+  // Light vertical breaks suggesting individual tiles per row
+  const tilesPerRow = 16;
+  const tw = 256 / tilesPerRow;
+  for (let i = 0; i < tilesPerRow; i++) {
+    ctx.fillStyle = "rgba(58, 20, 12, 0.25)";
+    ctx.fillRect(i * tw, 0, 1.0, 256);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function _makeWallPlasterTexture() {
+  const c = document.createElement("canvas");
+  c.width  = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d");
+  // Base cream
+  ctx.fillStyle = "#f3ece0";
+  ctx.fillRect(0, 0, 256, 256);
+  // Faint speckle — random dark / light pixels at low alpha
+  for (let i = 0; i < 1100; i++) {
+    const x = Math.random() * 256;
+    const y = Math.random() * 256;
+    const dark = Math.random() < 0.5;
+    ctx.fillStyle = dark ? "rgba(80, 60, 40, 0.10)" : "rgba(255, 245, 230, 0.20)";
+    ctx.fillRect(x, y, 1.5, 1.5);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const ROOF_TILE_TEX     = _makeRoofTileTexture();
+const WALL_PLASTER_TEX  = _makeWallPlasterTexture();
+
+// World-space repeat lengths — texture tiles every N metres regardless
+// of the geometry's UV layout.
+const ROOF_TILE_SCALE   = 2.0;   // metres per repeat
+const WALL_PLASTER_SCALE = 1.2;
+
+// Pre-set the repeat on the wall texture. Walls use auto-generated UVs
+// from ExtrudeGeometry that map across the bbox of the polygon, so a
+// fixed repeat looks consistent across rooms of similar size.
+WALL_PLASTER_TEX.repeat.set(4, 1.5);
+
 const lpWallMat = new THREE.MeshStandardMaterial({
-  color: LP_WALL_COLOR, roughness: 0.85, metalness: 0, flatShading: true,
+  color: LP_WALL_COLOR, map: WALL_PLASTER_TEX,
+  roughness: 0.85, metalness: 0, flatShading: true,
 });
 const lpFoundationMat = new THREE.MeshStandardMaterial({
   color: LP_FOUNDATION_COL, roughness: 0.95, metalness: 0, flatShading: true,
 });
 const lpWallMatOpenTop = new THREE.MeshStandardMaterial({
-  color: LP_WALL_COLOR, roughness: 0.85, metalness: 0,
+  color: LP_WALL_COLOR, map: WALL_PLASTER_TEX,
+  roughness: 0.85, metalness: 0,
   flatShading: true, side: THREE.DoubleSide,
 });
 const lpRoofMat = new THREE.MeshStandardMaterial({
-  color: LP_ROOF_COLOR, roughness: 0.70, metalness: 0,
+  color: LP_ROOF_COLOR, map: ROOF_TILE_TEX,
+  roughness: 0.70, metalness: 0,
   flatShading: true, side: THREE.DoubleSide,
 });
 const terrainGrassMat = new THREE.MeshStandardMaterial({
@@ -2301,6 +2379,12 @@ function buildLowPolyRoof(polygonLocal, baseY, height) {
   const peakY = baseY + height;
 
   const positions = [];
+  const uvs = [];
+  // Per-vertex UV from world XZ via planar projection from above, so
+  // the roof-tile texture tiles in metric world units regardless of
+  // each polygon's shape or scale.
+  const u = (x) => x / ROOF_TILE_SCALE;
+  const v = (z) => z / ROOF_TILE_SCALE;
   for (let i = 0; i < polygonLocal.length; i++) {
     const [ax, az] = polygonLocal[i];
     const [bx, bz] = polygonLocal[(i + 1) % polygonLocal.length];
@@ -2308,10 +2392,14 @@ function buildLowPolyRoof(polygonLocal, baseY, height) {
     positions.push(cx, peakY, cz);
     positions.push(ax, baseY, az);
     positions.push(bx, baseY, bz);
+    uvs.push(u(cx), v(cz));
+    uvs.push(u(ax), v(az));
+    uvs.push(u(bx), v(bz));
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("uv",       new THREE.Float32BufferAttribute(uvs, 2));
   geo.computeVertexNormals();
   return new THREE.Mesh(geo, lpRoofMat);
 }

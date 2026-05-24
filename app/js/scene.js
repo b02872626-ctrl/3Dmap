@@ -6,6 +6,10 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { FBXLoader }     from "three/addons/loaders/FBXLoader.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass }     from "three/addons/postprocessing/RenderPass.js";
+import { SSAOPass }       from "three/addons/postprocessing/SSAOPass.js";
+import { OutputPass }     from "three/addons/postprocessing/OutputPass.js";
 
 // Direction from target to camera, normalized. ~35° tilt above horizon
 // with a 45° yaw — classic isometric.
@@ -35,12 +39,16 @@ export function createScene(canvas) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.35;
 
   // ---------------- Scene ----------------
+  // Soft cream backdrop — matches the "studio render" look of the
+  // architectural reference instead of the previous dark void.
   const scene = new THREE.Scene();
-  scene.background = null;
-  scene.fog = new THREE.Fog(0x0c1116, 80, 320);
+  scene.background = new THREE.Color(0xf4ede0);
+  // Fog kept extremely subtle and tinted to match the backdrop so
+  // distant geometry blends rather than greying out.
+  scene.fog = new THREE.Fog(0xf4ede0, 220, 420);
 
   // ---------------- Perspective camera ----------------
   const aspect = window.innerWidth / window.innerHeight;
@@ -80,17 +88,16 @@ export function createScene(canvas) {
   };
 
   // ---------------- Lighting ----------------
-  // Slightly warmer ambient + hemi keep the cream walls from going flat
-  // in shadow. The sun gets ~2× the previous intensity so the new roofs
-  // throw a clear directional shadow across the platforms.
-  const ambient = new THREE.AmbientLight(0xf5efe2, 0.50);
+  // Studio-render lighting: warm-tinted ambient + bright hemi for fill,
+  // and a stronger directional sun for crisp shadows across the platforms.
+  const ambient = new THREE.AmbientLight(0xfff5e4, 0.65);
   scene.add(ambient);
 
-  const hemi = new THREE.HemisphereLight(0xfff3dc, 0x2a2f38, 0.85);
+  const hemi = new THREE.HemisphereLight(0xfff3dc, 0xb8a880, 1.05);
   hemi.position.set(0, 30, 0);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xffe9c8, 0.75);
+  const sun = new THREE.DirectionalLight(0xfff0d0, 1.10);
   sun.position.set(40, 80, -30);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -102,7 +109,7 @@ export function createScene(canvas) {
   sun.shadow.camera.far = 240;
   sun.shadow.bias       = -0.0002;
   sun.shadow.normalBias = 0.35;
-  sun.shadow.radius     = 8;
+  sun.shadow.radius     = 12;
   sun.target.position.set(0, 0, 0);
   scene.add(sun);
   scene.add(sun.target);
@@ -146,6 +153,27 @@ export function createScene(canvas) {
   // grid.material.opacity = 0.18;
   // scene.add(grid);
 
+  // ---------------- Post-processing: SSAO ----------------
+  // Soft contact shadows at every wall ↔ ground / column ↔ floor /
+  // building ↔ platform junction. Without this the model reads flat
+  // even with crisp direct lighting.
+  const composer = new EffectComposer(renderer);
+  composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  composer.setSize(window.innerWidth, window.innerHeight);
+  composer.addPass(new RenderPass(scene, camera));
+  const ssao = new SSAOPass(
+    scene, camera, window.innerWidth, window.innerHeight,
+  );
+  // Tight contact-AO settings — small kernel, short range, so the
+  // effect reads as a soft shadow under each wall edge rather than a
+  // muddy darkening over open areas.
+  ssao.kernelRadius   = 0.8;
+  ssao.minDistance    = 0.002;
+  ssao.maxDistance    = 0.08;
+  ssao.output         = SSAOPass.OUTPUT.Default;
+  composer.addPass(ssao);
+  composer.addPass(new OutputPass());
+
   // ---------------- Resize ----------------
   window.addEventListener("resize", () => {
     const w = window.innerWidth;
@@ -153,6 +181,8 @@ export function createScene(canvas) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    composer.setSize(w, h);
+    ssao.setSize(w, h);
   });
 
   // ---------------- Render loop ----------------
@@ -160,7 +190,7 @@ export function createScene(canvas) {
     renderer.setAnimationLoop(() => {
       controls.update();
       if (onFrame) onFrame();
-      renderer.render(scene, camera);
+      composer.render();
     });
   }
 
