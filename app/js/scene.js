@@ -111,14 +111,11 @@ export function createScene(canvas) {
   scene.add(sun.target);
 
   // ---------------- Ground + halo + grid ----------------
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(220, 64),
-    new THREE.MeshStandardMaterial({ color: 0x0e1217, roughness: 1, metalness: 0 }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(0, -0.05, 0);
-  ground.receiveShadow = true;
-  scene.add(ground);
+  // Dark ground disc removed — with the grass plane lowered to match
+  // the raised plaza bottom, this 220 m disc at Y=-0.05 was visible as
+  // a "floating" dark layer between the plaza side and the grass below.
+  // The lawn (added at scene level in floors.js) is the only ground
+  // plane now.
 
   // Faux-ambient halo disabled — the radial gradient drew a dark
   // shadow ring around the buildings on top of the SVG floor. The

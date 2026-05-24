@@ -102,7 +102,7 @@ export function buildFloors() {
     // Grass sits well below ground so the site plaza reads as a
     // visibly raised stone block above the surrounding lawn. Matches
     // the plaza bottom (PLATFORM_Y + PLATFORM_H − SITE_PLAZA_THICK).
-    grassBG.position.set(0, -0.70, 0);
+    grassBG.position.set(0, -1.55, 0);
     grassBG.receiveShadow = true;
     grassBG.userData.kind = "grass-bg";
     root.add(grassBG);
@@ -821,7 +821,7 @@ const SITE_PLAZA = {
 // the building-platform top (PLATFORM_Y + PLATFORM_H) so the
 // buildings on it don't need to move; the box just extends DOWN to
 // the lowered grass level so its sides are visible as a raised step.
-const SITE_PLAZA_THICK = 0.75;
+const SITE_PLAZA_THICK = 1.60;
 
 function buildSitePlaza() {
   const w = SITE_PLAZA.maxX - SITE_PLAZA.minX;
