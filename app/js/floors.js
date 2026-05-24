@@ -973,7 +973,7 @@ function addPlazaGrassPatches(group) {
 //  grass patch. One InstancedMesh per layer = a single draw call for
 //  ~10–13k blades.
 // ====================================================================
-const SHOW_GRASS_BLADES    = true;
+const SHOW_GRASS_BLADES    = false;
 const GRASS_DENSITY        = 25;       // blades per m²
 const GRASS_BLADE_BASE_W   = 0.10;     // metres at the bottom
 const GRASS_BLADE_TIP_W    = 0.025;    // tapered tip
