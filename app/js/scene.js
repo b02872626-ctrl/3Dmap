@@ -1,7 +1,7 @@
 // =============================================================
-//  Three.js scene: ORTHOGRAPHIC camera. Starts at an isometric
-//  direction but free to orbit — pan, zoom, and rotate are all
-//  enabled.
+//  Three.js scene: PERSPECTIVE camera. Starts at an isometric
+//  direction but free to orbit — pan, dolly (zoom), and rotate are
+//  all enabled.
 // =============================================================
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -10,12 +10,16 @@ import { FBXLoader }     from "three/addons/loaders/FBXLoader.js";
 // Direction from target to camera, normalized. ~35° tilt above horizon
 // with a 45° yaw — classic isometric.
 export const ISO_DIR = new THREE.Vector3(1, 0.82, 1).normalize();
-// How far the camera sits behind that direction. In an orthographic
-// projection this distance doesn't affect "zoom" — it only matters for
-// shadow / depth precision — so we pick a comfortable mid-range value.
-export const ISO_DISTANCE = 100;
-// Vertical extent of the visible world frustum at zoom = 1.
-export const FRUSTUM_SIZE = 60;
+// Default camera distance from the orbit target. OrbitControls dollies
+// this in / out via mouse wheel; minDistance / maxDistance bound it.
+export const ISO_DISTANCE = 75;
+// Vertical field of view in degrees. Narrower FOV gives a more
+// "near-orthographic" feel; wider FOV is more dramatic perspective.
+export const FOV = 35;
+// Helper for distance calculations in main.js. distance such that a
+// world span of N metres fills the full vertical view height:
+//   distance = N / (2 * tan(FOV/2))
+export const FOV_HALF_TAN = Math.tan((FOV * Math.PI / 180) / 2);
 
 export function createScene(canvas) {
   // ---------------- Renderer ----------------
@@ -38,21 +42,14 @@ export function createScene(canvas) {
   scene.background = null;
   scene.fog = new THREE.Fog(0x0c1116, 80, 320);
 
-  // ---------------- Orthographic camera ----------------
+  // ---------------- Perspective camera ----------------
   const aspect = window.innerWidth / window.innerHeight;
-  const camera = new THREE.OrthographicCamera(
-    -FRUSTUM_SIZE * aspect / 2,
-     FRUSTUM_SIZE * aspect / 2,
-     FRUSTUM_SIZE / 2,
-    -FRUSTUM_SIZE / 2,
-    0.1, 600,
-  );
+  const camera = new THREE.PerspectiveCamera(FOV, aspect, 0.1, 600);
   const initialTarget = new THREE.Vector3(0, 4, 0);
   camera.position.copy(initialTarget).add(
     ISO_DIR.clone().multiplyScalar(ISO_DISTANCE),
   );
   camera.lookAt(initialTarget);
-  camera.zoom = 1;
   camera.updateProjectionMatrix();
 
   // ---------------- Orbit controls: pan + zoom + rotate ----------------
@@ -66,8 +63,8 @@ export function createScene(canvas) {
   controls.zoomSpeed  = 1.1;
   controls.panSpeed   = 0.8;
   controls.rotateSpeed = 0.9;
-  controls.minZoom    = 0.45;                // can't zoom out further than ~half size
-  controls.maxZoom    = 4.5;                 // can't zoom in further than ~4.5×
+  controls.minDistance = 15;                 // closest dolly
+  controls.maxDistance = 250;                // furthest dolly
   controls.screenSpacePanning = true;        // map-style panning
   // Left-drag rotates the orbit (default 3D-viewer behaviour). Right-drag
   // pans the map. Wheel / pinch zooms.
@@ -153,11 +150,7 @@ export function createScene(canvas) {
   window.addEventListener("resize", () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const a = w / h;
-    camera.left   = -FRUSTUM_SIZE * a / 2;
-    camera.right  =  FRUSTUM_SIZE * a / 2;
-    camera.top    =  FRUSTUM_SIZE / 2;
-    camera.bottom = -FRUSTUM_SIZE / 2;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
   });

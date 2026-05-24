@@ -2,7 +2,14 @@
 //  Bootstrap + UI wiring for the CAM 3D Visitor Guide
 // =============================================================
 import * as THREE from "three";
-import { createScene, ISO_DIR, ISO_DISTANCE, FRUSTUM_SIZE } from "./scene.js";
+import { createScene, ISO_DIR, ISO_DISTANCE, FOV_HALF_TAN } from "./scene.js";
+
+// Helper: camera distance from target so a world span of `span`
+// metres fills 1 / fillFactor of the view height. Bigger fillFactor =
+// looser framing (smaller cluster, more margin).
+function distanceFor(span, fillFactor) {
+  return (span * fillFactor) / (2 * FOV_HALF_TAN);
+}
 import { buildFloors, tryReplaceWithFBX } from "./floors.js";
 import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, BUILDINGS, ACTIVE_BUILDING } from "./data.js";
 
@@ -383,41 +390,42 @@ function flyToRoom(group) {
   const floorY = floorGroup ? floorGroup.position.y : 0;
   const target = new THREE.Vector3(localX, floorY + 1.6, localZ);
 
-  // Zoom so the room fills a comfortable portion of the visible frustum —
-  // smaller rooms get more zoom, large halls less. Min is generous so
-  // clicking a big hall keeps the other floors visible (zoom stays under
-  // the x-ray threshold). Small / medium rooms zoom past the threshold
-  // and the upper floors snap out for clarity.
+  // Distance so the room fills a comfortable portion of the visible
+  // frustum — closer for small rooms, further for big halls.
   const span = Math.max(fp.w, fp.d);
-  let zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 3.2), 1.4, 3.2);
+  let distance = THREE.MathUtils.clamp(distanceFor(span, 3.2), 20, 80);
 
   // Dolly in further if we're effectively already at this room
+  const currentOffset = camera.position.clone().sub(controls.target);
   if (
     controls.target.distanceTo(target) < 1.5 &&
-    Math.abs(camera.zoom - zoom) < 0.15
+    Math.abs(currentOffset.length() - distance) < 4
   ) {
-    zoom = Math.min(controls.maxZoom, zoom * 1.35);
+    distance = Math.max(controls.minDistance, distance / 1.35);
   }
-  flyTo(target, zoom, 55);
+  flyTo(target, distance, 55);
 }
 
 let _origDamping = null;
-function flyTo(targetPoint, zoomLevel, dur = 55, resetOrbit = false) {
+function flyTo(targetPoint, distance, dur = 55, resetOrbit = false) {
   if (!flyAnim) _origDamping = controls.enableDamping;
   controls.enableDamping = false;
   // Snapshot the current camera-to-target offset. While the fly runs we
-  // hold this offset constant so the user's chosen orbit angle isn't
-  // wiped out. resetOrbit=true overrides it with the canonical iso
-  // direction (used by the reset-cam button).
-  const offset = resetOrbit
-    ? _viewOffset.clone()
-    : camera.position.clone().sub(controls.target);
+  // lerp from this offset to a new one whose magnitude is `distance`.
+  // resetOrbit=true rotates the direction back to the canonical iso
+  // vector (used by the reset-cam button).
+  const offsetFrom = camera.position.clone().sub(controls.target);
+  const direction = resetOrbit
+    ? ISO_DIR.clone()
+    : offsetFrom.clone().normalize();
+  // Defensive: if camera was at target (zero offset), fall back to iso.
+  if (!isFinite(direction.x) || direction.lengthSq() < 1e-6) direction.copy(ISO_DIR);
+  const offsetTo = direction.multiplyScalar(distance);
   flyAnim = {
-    tgtFrom:  controls.target.clone(),
-    tgtTo:    targetPoint.clone(),
-    zoomFrom: camera.zoom,
-    zoomTo:   zoomLevel,
-    offset,
+    tgtFrom:    controls.target.clone(),
+    tgtTo:      targetPoint.clone(),
+    offsetFrom,
+    offsetTo,
     t: 0, dur,
   };
   cameraLerp = null;
@@ -429,10 +437,10 @@ function updateFly() {
   const k = Math.min(1, flyAnim.t / flyAnim.dur);
   const ease = 0.5 - 0.5 * Math.cos(k * Math.PI);   // cosine ease in/out
   controls.target.lerpVectors(flyAnim.tgtFrom, flyAnim.tgtTo, ease);
-  // Hold the captured offset so the orbit angle stays put.
-  camera.position.copy(controls.target).add(flyAnim.offset);
-  camera.zoom = THREE.MathUtils.lerp(flyAnim.zoomFrom, flyAnim.zoomTo, ease);
-  camera.updateProjectionMatrix();
+  // Lerp the offset vector — its length controls the perspective
+  // "zoom" (distance from target) and its direction controls orbit.
+  const offset = new THREE.Vector3().lerpVectors(flyAnim.offsetFrom, flyAnim.offsetTo, ease);
+  camera.position.copy(controls.target).add(offset);
   if (k >= 1) {
     flyAnim = null;
     if (_origDamping !== null) {
@@ -649,15 +657,14 @@ applyCategoryFilter();
 // after pan/zoom for the active building, and restores it on next load.
 // Floor selection + iso-vs-top is persisted too. Use the "reset camera"
 // button (⟲) to clear the saved view and fall back to the auto-frame.
-// Storage key bumped to v2 to invalidate stale saved views from the
-// previous tight-zoom default — visitors now see the looser default
-// instead of being stuck on the old framing.
-const CAM_STORAGE_KEY = `cam-view-${ACTIVE_BUILDING.id}-v2`;
+// Storage key bumped to v3 — perspective-camera switch makes any
+// ortho-era saved zoom value meaningless; visitors fall through to
+// the new auto-frame default on next load.
+const CAM_STORAGE_KEY = `cam-view-${ACTIVE_BUILDING.id}-v3`;
 function saveCameraView() {
   try {
     const offset = camera.position.clone().sub(controls.target);
     localStorage.setItem(CAM_STORAGE_KEY, JSON.stringify({
-      zoom:        camera.zoom,
       target:      { x: controls.target.x, y: controls.target.y, z: controls.target.z },
       offset:      { x: offset.x, y: offset.y, z: offset.z },
       activeFloor: activeFloor,
@@ -672,7 +679,7 @@ function restoreCameraView() {
     if (!raw) return false;
     saved = JSON.parse(raw);
   } catch { return false; }
-  if (!saved || typeof saved.zoom !== "number") return false;
+  if (!saved || !saved.target || !saved.offset) return false;
 
   // Restore floor selection first so layout positions Y correctly.
   if (saved.activeFloor !== undefined && saved.activeFloor !== activeFloor) {
@@ -688,19 +695,13 @@ function restoreCameraView() {
     setViewMode(saved.viewMode);
   }
   controls.target.set(saved.target.x, saved.target.y, saved.target.z);
-  camera.zoom = saved.zoom;
-  // If we persisted the orbit offset, restore it so the user's chosen
-  // rotation comes back. Older saves without an offset fall back to the
-  // canonical iso direction.
-  if (saved.offset && Number.isFinite(saved.offset.x)) {
-    camera.position.set(
-      saved.target.x + saved.offset.x,
-      saved.target.y + saved.offset.y,
-      saved.target.z + saved.offset.z,
-    );
-  } else {
-    camera.position.copy(controls.target).add(_viewOffset);
-  }
+  // Restore the camera offset (direction + distance). Perspective: the
+  // offset's length is now the "zoom".
+  camera.position.set(
+    saved.target.x + saved.offset.x,
+    saved.target.y + saved.offset.y,
+    saved.target.z + saved.offset.z,
+  );
   camera.updateProjectionMatrix();
   controls.update();
   // Same fix as frameInitialView — cancel any leftover lerp.
@@ -743,15 +744,18 @@ function frameInitialView(animate = false, resetOrbit = false) {
   const floorY = floorGroup ? floorGroup.position.y : 0;
 
   const targetVec = new THREE.Vector3(cx, floorY + 3, cz);
-  // Looser default: cluster fills ~60% of the visible frustum so the
-  // grass + trees around the compound are visible too.
-  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / (span * 1.55), 0.55, 1.5);
+  // Looser default: cluster fills ~65% of the visible frustum so the
+  // grass around the compound is visible too.
+  const distance = THREE.MathUtils.clamp(distanceFor(span, 1.55), 35, 200);
   if (animate) {
-    flyTo(targetVec, zoom, 55, resetOrbit);
+    flyTo(targetVec, distance, 55, resetOrbit);
   } else {
     controls.target.copy(targetVec);
-    camera.position.copy(targetVec).add(_viewOffset);
-    camera.zoom = zoom;
+    // Set camera offset to ISO direction × distance — the default
+    // framing snap doesn't try to preserve any prior orbit.
+    camera.position.copy(targetVec).add(
+      ISO_DIR.clone().multiplyScalar(distance),
+    );
     camera.updateProjectionMatrix();
     controls.update();
     // Cancel any vertical-recenter lerp left over from applyFloorLayout —
@@ -999,7 +1003,9 @@ function focusOnStep(step) {
   const floorGroup = floorGroups.get(step.floor);
   const floorY = floorGroup ? floorGroup.position.y : 0;
   const target = new THREE.Vector3(step.startX, floorY + 1.6, step.startZ);
-  flyTo(target, 2.4, 50);
+  // Pull in close for a directions step — fixed distance regardless
+  // of room size.
+  flyTo(target, 28, 50);
 }
 
 function flyToRoutePoints(pathNodes) {
@@ -1009,12 +1015,12 @@ function flyToRoutePoints(pathNodes) {
     (f) => floorGroups.get(f).userData.targetY ?? floorGroups.get(f).position.y,
   );
   const cy = (Math.min(...ys) + Math.max(...ys)) / 2 + 4;
-  // Span of the route in XZ — used to pick a zoom that fits it on screen
+  // Span of the route in XZ — used to pick a distance that fits it on screen
   const xs = pathNodes.map((n) => n.x);
   const zs = pathNodes.map((n) => n.z);
   const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
-  const zoom = THREE.MathUtils.clamp(FRUSTUM_SIZE / Math.max(span * 1.4, 12), 0.5, 2.2);
-  flyTo(new THREE.Vector3(sx, cy, sz), zoom, 65);
+  const distance = THREE.MathUtils.clamp(distanceFor(Math.max(span, 8), 1.6), 35, 180);
+  flyTo(new THREE.Vector3(sx, cy, sz), distance, 65);
 }
 
 // ---------------- X-ray fade for occluders ----------------
@@ -1042,64 +1048,11 @@ const _xrayTmp    = new THREE.Vector3();
 const _xrayRight  = new THREE.Vector3();
 const _xrayUp     = new THREE.Vector3();
 
-function updateXray() {
-  if (activeFloor !== "all") return;
-
-  // Make sure all floor groups are visible — we control purely via opacity.
-  for (const fg of floorGroups.values()) fg.visible = true;
-
-  // Global "how zoomed in" factor: 0 at overview, 1 fully zoomed in.
-  const zoomFade = THREE.MathUtils.smoothstep(
-    camera.zoom, XRAY_ZOOM_START, XRAY_ZOOM_FULL,
-  );
-
-  if (zoomFade < 0.005) {
-    // Overview: restore each object to its natural opacity.
-    for (const m of occluders) {
-      const base = m.userData.baseOpacity ?? 1;
-      if (Math.abs(m.material.opacity - base) > 0.005) m.material.opacity = base;
-    }
-    return;
-  }
-
-  // Camera basis vectors (constant under the iso lock, but cheap to read).
-  _xrayRight.setFromMatrixColumn(camera.matrix, 0);
-  _xrayUp.setFromMatrixColumn(camera.matrix, 1);
-  const halfH = FRUSTUM_SIZE / (2 * camera.zoom);
-  const halfW = halfH * (window.innerWidth / window.innerHeight);
-
-  const focusY = controls.target.y;
-
-  for (const m of occluders) {
-    const base = m.userData.baseOpacity ?? 1;
-    const floorY = m.userData.floorGroup?.position.y;
-    // Floors at or below the focus stay at their natural opacity.
-    if (floorY === undefined || floorY <= focusY + 1.0) {
-      if (Math.abs(m.material.opacity - base) > 0.005) m.material.opacity = base;
-      continue;
-    }
-
-    // Project the mesh's world position into screen-space relative to the
-    // OrbitControls target (which sits at the centre of the screen).
-    m.getWorldPosition(_xrayTmp).sub(controls.target);
-    const sx = _xrayTmp.dot(_xrayRight) / halfW;
-    const sy = _xrayTmp.dot(_xrayUp)    / halfH;
-    const radial = Math.sqrt(sx * sx + sy * sy);
-
-    // Oval mask: 1 dead-center, 0 past XRAY_RADIAL_OUT. So things at the
-    // centre of the view fade much more aggressively than things at the
-    // edge of the screen.
-    const radialMask = 1 - THREE.MathUtils.smoothstep(
-      XRAY_RADIAL_IN, XRAY_RADIAL_OUT, radial,
-    );
-
-    const fade = zoomFade * radialMask;
-    const target = THREE.MathUtils.lerp(base, XRAY_MIN_OPACITY, fade);
-    if (Math.abs(m.material.opacity - target) > 0.005) {
-      m.material.opacity = target;
-    }
-  }
-}
+// X-ray fade was disabled (the call was removed from the render loop)
+// and its math referenced the now-gone orthographic camera.zoom /
+// FRUSTUM_SIZE. Kept the function as a no-op stub so any stale caller
+// fails gracefully rather than throwing ReferenceError.
+function updateXray() { /* disabled */ }
 
 start(() => {
   updateCameraLerp();
