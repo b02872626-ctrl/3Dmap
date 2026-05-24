@@ -235,7 +235,7 @@ const ABA_ROOMS = [
   // Larger building (centre, square plan). Ground floor solid.
   aj("16", "Aba Jifar II Palace Construction Method", "history",    21.84,  4.74, 2.40, 5.10, 1),
   aj("18", "Courtyard",                                "ceremonial", 23.76,  4.92, 8.58, 7.62, 1),
-  aj("17", "Wrestling",                                "culture",    24.72,  8.04, 4.08, 3.84, 1),
+  aj("17", "Wrestling",                                "culture",    24.72,  8.04, 4.08, 3.84, 1, { open: true }),
   aj("15", "Gibe Kingdom",                             "kingdom",    22.38, 13.44, 7.20, 3.54, 1),
 
   // Free-standing pavilions

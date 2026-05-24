@@ -840,6 +840,9 @@ function addOutdoorTerrain(group) {
   // we only add the per-building paved platforms — floor-1 only.
   for (const room of ROOMS) {
     if (room.floor !== 1) continue;
+    // Open yards (e.g. Wrestling) are rendered as grass patches in
+    // buildSitumRoomBlock, not as raised paved pads.
+    if (room.open) continue;
     const platform = buildBuildingPlatform(room);
     if (platform) group.add(platform);
 
@@ -1038,6 +1041,30 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
     const x1 = offsetX(x + inset),       z1 = offsetZ(z + inset);
     const x2 = offsetX(x + w - inset),   z2 = offsetZ(z + d - inset);
     polygonLocal = [[x1, z1], [x2, z1], [x2, z2], [x1, z2]];
+  }
+
+  // Open yards (e.g. Wrestling) — render as a grass patch sitting at
+  // the platform-top Y so it reads as a green panel cut out of the
+  // paved area. No walls, roof, windows, doors, or foundation.
+  if (room.open) {
+    const yardMat = new THREE.MeshStandardMaterial({
+      color: TERRAIN_GRASS, roughness: 1.0, metalness: 0, flatShading: true,
+    });
+    const yard = buildExtrudedPolygon(polygonLocal, 0.02, yardMat);
+    yard.position.y = PLATFORM_Y + PLATFORM_H + 0.008;
+    yard.receiveShadow = true;
+    yard.castShadow = false;
+    group.add(yard);
+    group.userData = {
+      kind: "room",
+      roomId: room.id,
+      room,
+      baseColor: new THREE.Color(TERRAIN_GRASS),
+      originalEmissive: new THREE.Color(0, 0, 0),
+      tile: yard,
+      highlightTargets: [yard],
+    };
+    return group;
   }
 
   // Cream tall walls. Rooms with another floor stacked on top get a flat
