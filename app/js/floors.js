@@ -389,10 +389,12 @@ function buildSitumFloor(group, floor, roomGroups) {
   // SHOW_FACADE_DEBUG and FACADE_ZONES at the bottom of this file).
   addFacadeFromZones(group, floor);
 
-  // GroundSurfaceDetails — path curbs + stair zones (ground floor only).
+  // GroundSurfaceDetails — path curbs + stair zones + retaining walls
+  // (ground floor only).
   if (SHOW_GROUND_DETAILS && floor.id === 1) {
-    if (SHOW_CURBS)         addPathCurbsForFloor(group);
-    if (SHOW_STAIR_DETAILS) addStairZonesForFloor(group, floor.id);
+    if (SHOW_CURBS)            addPathCurbsForFloor(group);
+    if (SHOW_STAIR_DETAILS)    addStairZonesForFloor(group, floor.id);
+    if (SHOW_RETAINING_WALLS)  addRetainingWallsForFloor(group, floor.id);
   }
 }
 
@@ -1815,37 +1817,122 @@ const SHOW_GROUND_DETAILS   = true;
 const SHOW_PAVING_LINES     = true;
 const SHOW_CURBS            = true;
 const SHOW_STAIR_DETAILS    = true;
+const SHOW_RETAINING_WALLS  = true;
 const SHOW_GRASS_VARIATION  = true;
+const STAIR_DEBUG           = false;  // tiny magenta dots at zone start/end
 
 // Tile grid on platforms
-const GD_TILE_SIZE          = 1.60;   // metres — distance between grout lines
-const GD_TILE_OPACITY       = 0.30;   // alpha of the grout line in the overlay
-const GD_TILE_LIFT          = 0.003;  // metres above platform surface
+const GD_TILE_SIZE          = 1.60;
+const GD_TILE_OPACITY       = 0.30;
+const GD_TILE_LIFT          = 0.003;
 
 // Path curbs
-const GD_CURB_HEIGHT        = 0.05;   // metres — how much the curb rises
-const GD_CURB_WIDTH         = 0.09;   // metres — perpendicular thickness
-const GD_CURB_GAP           = 0.04;   // metres — gap between path edge and curb
-const GD_CURB_END_INSET     = 0.40;   // metres — pull-back from each waypoint
+const GD_CURB_HEIGHT        = 0.05;
+const GD_CURB_WIDTH         = 0.09;
+const GD_CURB_GAP           = 0.04;
+const GD_CURB_END_INSET     = 0.40;
 
-// Platform edge band
-const GD_EDGE_WIDTH         = 0.20;   // metres — width of the band around platforms
-const GD_EDGE_HEIGHT        = 0.025;  // metres — band thickness
+// Platform edge band — now a TALL vertical skirt wrapping each
+// platform from ground up to a small lip above the platform top, so
+// the pad reads as a raised stone block instead of a flat polygon.
+const GD_EDGE_WIDTH         = 0.20;
+const GD_EDGE_HEIGHT        = 0.08;   // metres — skirt top above ground
 
-// Stair zones — explicit, none defined yet. Add entries like:
-// { start: [px, pz], end: [px, pz], stepCount: 3, stepHeight: 0.06,
-//   stepDepth: 0.30, width: 1.20, floor: 1 }
-const STAIR_ZONES = [];
+// Stair step defaults (per-zone fields override these)
+const GD_STEP_HEIGHT        = 0.06;
+const GD_STEP_DEPTH         = 0.35;
+const GD_STEP_WIDTH         = 1.20;
+const GD_STAIR_CHEEK_W      = 0.10;   // side cheek wall thickness
+const GD_STAIR_CHEEK_H_ADD  = 0.04;   // cheek rises this much above top tread
+
+// Retaining wall defaults (per-zone fields override these)
+const GD_RETAINING_WALL_HEIGHT = 0.20;
+const GD_RETAINING_WALL_WIDTH  = 0.12;
+
+// Hand-picked stair zones. Coordinates are RAW plan-coords (same
+// space as room.footprint / waypoint x,z) — the renderer converts to
+// plan-centred internally.
+const STAIR_ZONES = [
+  // 1) Main entrance approach — steps on the south spine just north
+  //    of node 1 (wp-main-entrance @ 14.5, 33.0), heading upward
+  //    toward wp-palace-front (17.0, 23.0).
+  {
+    id: "stair-entrance",
+    start: [14.50, 32.10],
+    end:   [14.65, 30.60],
+    stepCount: 3, width: 1.40, cheeks: true,  floor: 1,
+  },
+  // 2) Short step zone between node 1 and the palace block at the
+  //    palace-front waypoint (17.0, 23.0). Subtle 2-step rise.
+  {
+    id: "stair-palace-front",
+    start: [16.40, 22.20],
+    end:   [16.55, 21.40],
+    stepCount: 2, width: 1.20, cheeks: false, floor: 1,
+  },
+  // 3) Central hub steps — between wp-palace-front and wp-central-hub
+  //    (19.5, 19.5), where the spine, mosque connector, and courtyard
+  //    connector all meet. Major run, gets cheek walls.
+  {
+    id: "stair-central-hub",
+    start: [18.80, 20.90],
+    end:   [19.40, 20.05],
+    stepCount: 3, width: 1.30, cheeks: true,  floor: 1,
+  },
+  // 4) Stepped connector between left building cluster (palace +
+  //    religion) and the right exhibit cluster — along the
+  //    central-hub → courtyard → exhibit primary path.
+  {
+    id: "stair-exhibit-connector",
+    start: [21.60, 17.20],
+    end:   [22.80, 15.90],
+    stepCount: 3, width: 1.30, cheeks: false, floor: 1,
+  },
+  // 5) Short entrance steps at the Religion pavilion's south door
+  //    (door-19 @ 15.75, 27.52) — only because the primary path
+  //    reaches that door via the mosque waypoint.
+  {
+    id: "stair-religion-door",
+    start: [15.75, 28.30],
+    end:   [15.75, 27.70],
+    stepCount: 2, width: 1.10, cheeks: false, floor: 1,
+  },
+];
+
+// Hand-picked retaining-wall positions. Raw plan-coords. Each entry
+// is a line segment; the wall is built as a thin vertical box of
+// GD_RETAINING_WALL_HEIGHT/WIDTH along that segment. Kept off the
+// building footprints, off the path centrelines, and clear of doors.
+const RETAINING_WALL_ZONES = [
+  // South perimeter — landscape wall west of the main entrance node.
+  { id: "wall-sw-1", start: [ 9.50, 31.50], end: [12.80, 31.50], floor: 1 },
+  // South perimeter — landscape wall east of the main entrance node.
+  { id: "wall-sw-2", start: [16.80, 31.50], end: [20.50, 31.50], floor: 1 },
+  // East landscape — vertical wall east of the central building pad.
+  { id: "wall-east-1", start: [38.50,  5.50], end: [38.50, 12.50], floor: 1 },
+];
 
 // Materials
 const gdEdgeBandMat = new THREE.MeshStandardMaterial({
-  color: 0xb19a78, roughness: 0.95, metalness: 0, flatShading: true,
+  color: 0x8e7a5b, roughness: 0.95, metalness: 0, flatShading: true,
 });
 const gdCurbMat = new THREE.MeshStandardMaterial({
   color: 0x8d8474, roughness: 0.92, metalness: 0, flatShading: true,
 });
 const gdStairMat = new THREE.MeshStandardMaterial({
   color: 0xa89478, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const gdStairTreadMat = new THREE.MeshStandardMaterial({
+  color: 0x9a8467, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const gdCheekMat = new THREE.MeshStandardMaterial({
+  color: 0x6f6452, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const gdRetainingWallMat = new THREE.MeshStandardMaterial({
+  color: 0x847258, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const gdDebugDotMat = new THREE.MeshBasicMaterial({
+  color: 0xff00ff, depthWrite: false,
 });
 const gdGrassPatchMats = [
   new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 1.0, metalness: 0, flatShading: true }),
@@ -1921,9 +2008,10 @@ function buildGdPavingOverlay(room) {
   return overlay;
 }
 
-// Darker band wrapped around the platform perimeter — sits at
-// PLATFORM_Y, sticking out GD_EDGE_WIDTH past the platform so the
-// platform reads as a raised pad with a stone border.
+// Vertical skirt wrapped around the platform perimeter. Extruded
+// from the ground (Y=0) up to GD_EDGE_HEIGHT (slightly above the
+// platform top), sticking out GD_EDGE_WIDTH past the platform so the
+// pad reads as a raised stone block with a darker stone border.
 function buildGdPlatformEdgeBand(room) {
   const platformPoly = gdPlatformPolygon(room);
   const outerPoly = offsetPolygonOutward(platformPoly, GD_EDGE_WIDTH);
@@ -1941,12 +2029,17 @@ function buildGdPlatformEdgeBand(room) {
   }
   shape.holes.push(hole);
 
+  // Extrude the full skirt height. After rotateX(PI/2) the geometry
+  // spans world Y = 0 (top of extrusion) down to Y = -depth (bottom).
+  // Lifting mesh.y to GD_EDGE_HEIGHT puts the skirt top at
+  // GD_EDGE_HEIGHT and the bottom on the ground (Y=0).
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: GD_EDGE_HEIGHT, bevelEnabled: false,
   });
   geo.rotateX(Math.PI / 2);
   const mesh = new THREE.Mesh(geo, gdEdgeBandMat);
-  mesh.position.y = PLATFORM_Y + GD_EDGE_HEIGHT;
+  mesh.position.y = GD_EDGE_HEIGHT;
+  mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -2008,25 +2101,106 @@ function addStairZonesForFloor(group, floorId) {
     const ex = offsetX(zone.end[0]),   ez = offsetZ(zone.end[1]);
     const dx = ex - sx, dz = ez - sz;
     const len = Math.hypot(dx, dz);
-    if (len < 0.1 || zone.stepCount < 1) continue;
+    const stepCount  = zone.stepCount  ?? 3;
+    if (len < 0.1 || stepCount < 1) continue;
+    const stepHeight = zone.stepHeight ?? GD_STEP_HEIGHT;
+    const stepWidth  = zone.width      ?? GD_STEP_WIDTH;
+    const stepLen    = len / stepCount;
+
     const ux = dx / len, uz = dz / len;
+    // Box's long axis is +X; this yaw rotates +X to the (ux,uz) direction.
     const yaw = Math.atan2(-uz, ux);
-    const stepLen = len / zone.stepCount;
-    for (let i = 0; i < zone.stepCount; i++) {
-      const t = (i + 0.5) / zone.stepCount;
-      const stepCx = sx + dx * t;
-      const stepCz = sz + dz * t;
-      const stepY = (i + 0.5) * zone.stepHeight;
+
+    // Stair treads — each step is a box whose long axis is the
+    // STAIR WIDTH direction (perpendicular to the climb direction).
+    // BoxGeometry(width, height, depth): width along stair, depth along climb.
+    for (let i = 0; i < stepCount; i++) {
+      const t = (i + 0.5) / stepCount;
+      const cx = sx + dx * t;
+      const cz = sz + dz * t;
+      const cy = (i + 0.5) * stepHeight;
       const step = new THREE.Mesh(
-        new THREE.BoxGeometry(zone.width, zone.stepHeight, stepLen),
-        gdStairMat,
+        new THREE.BoxGeometry(stepWidth, stepHeight, stepLen),
+        gdStairTreadMat,
       );
-      step.position.set(stepCx, stepY, stepCz);
-      step.rotation.y = yaw;
+      // We want the step's local X to lie ACROSS the stair (perpendicular
+      // to climb). Rotate by yaw + 90° so +X maps to the side-perpendicular
+      // of the climb direction.
+      step.position.set(cx, cy, cz);
+      step.rotation.y = yaw + Math.PI / 2;
       step.castShadow = true;
       step.receiveShadow = true;
       group.add(step);
     }
+
+    // Side cheek walls — only on flagged zones. One long box on each
+    // side, sloped to follow the steps' top edge.
+    if (zone.cheeks) {
+      const topY = stepCount * stepHeight + GD_STAIR_CHEEK_H_ADD;
+      const cheekH = topY;
+      const cheekL = len;
+      // Perpendicular direction (in XZ) for offsetting cheeks sideways.
+      const px = -uz, pz = ux;
+      const sideOffset = stepWidth / 2 + GD_STAIR_CHEEK_W / 2;
+      const cheekCx = (sx + ex) / 2;
+      const cheekCz = (sz + ez) / 2;
+      const cheekCy = cheekH / 2;
+      for (const side of [-1, 1]) {
+        const cheek = new THREE.Mesh(
+          new THREE.BoxGeometry(GD_STAIR_CHEEK_W, cheekH, cheekL),
+          gdCheekMat,
+        );
+        cheek.position.set(
+          cheekCx + px * sideOffset * side,
+          cheekCy,
+          cheekCz + pz * sideOffset * side,
+        );
+        cheek.rotation.y = yaw;
+        cheek.castShadow = true;
+        cheek.receiveShadow = true;
+        group.add(cheek);
+      }
+    }
+
+    // STAIR_DEBUG — magenta cubes at the start + end of each zone.
+    if (STAIR_DEBUG) {
+      for (const [px, py, pz] of [[sx, 0.02, sz], [ex, 0.02, ez]]) {
+        const dot = new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.18, 0.18),
+          gdDebugDotMat,
+        );
+        dot.position.set(px, py, pz);
+        group.add(dot);
+      }
+    }
+  }
+}
+
+// Low retaining walls along each entry in RETAINING_WALL_ZONES. A
+// wall is a thin vertical box from start → end, sitting on the
+// ground at GD_RETAINING_WALL_HEIGHT tall and GD_RETAINING_WALL_WIDTH
+// thick.
+function addRetainingWallsForFloor(group, floorId) {
+  for (const zone of RETAINING_WALL_ZONES) {
+    if (zone.floor !== floorId) continue;
+    const sx = offsetX(zone.start[0]), sz = offsetZ(zone.start[1]);
+    const ex = offsetX(zone.end[0]),   ez = offsetZ(zone.end[1]);
+    const dx = ex - sx, dz = ez - sz;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.1) continue;
+    const ux = dx / len, uz = dz / len;
+    const yaw = Math.atan2(-uz, ux);
+    const h = zone.height ?? GD_RETAINING_WALL_HEIGHT;
+    const w = zone.width  ?? GD_RETAINING_WALL_WIDTH;
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(len, h, w),
+      gdRetainingWallMat,
+    );
+    wall.position.set((sx + ex) / 2, h / 2, (sz + ez) / 2);
+    wall.rotation.y = yaw;
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+    group.add(wall);
   }
 }
 
