@@ -364,19 +364,14 @@ function buildSitumFloor(group, floor, roomGroups) {
     const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
     // Beige ground corridors UNDER each path edge — extends the paved
     // ground along the walking routes so paths never appear to float
-    // on the grass.
+    // on the grass. Uniform width means L-junctions are clean without
+    // any extra pad geometry.
     for (const edge of WAYPOINT_EDGES) {
       const [aId, bId, type = "primary"] = edge;
       const a = wpById.get(aId), b = wpById.get(bId);
       if (!a || !b) continue;
       const corridor = buildPathGroundCorridor(a, b, type);
       if (corridor) group.add(corridor);
-    }
-    // Round pads at every waypoint smooth out the stair-step pattern
-    // where two corridor rectangles of different widths meet.
-    for (const wp of WAYPOINTS) {
-      if (wp.floor !== floor.id) continue;
-      group.add(buildWaypointGroundPad(wp));
     }
     for (const edge of WAYPOINT_EDGES) {
       const [aId, bId, type = "primary"] = edge;
@@ -451,19 +446,16 @@ const lampHeadMat = new THREE.MeshStandardMaterial({
 // level as the building platforms (PLATFORM_Y + PLATFORM_H on top)
 // and is slightly wider than the path strip rendered on top of it.
 // Visually this extends the paved ground along each walk path so the
-// path never appears to spill out onto grass. Each waypoint also gets
-// a circular pad (buildWaypointGroundPad below) so the corner where
-// two corridors of different widths meet is absorbed into a clean
-// rounded junction instead of showing rectangle stair-steps.
-const GROUND_CORRIDOR_SIDE   = 0.70;     // metres extra on each side
-const GROUND_CORRIDOR_END    = 1.40;     // metres extra at each end (covers
-                                         // the perpendicular corridor's
-                                         // full half-width at the corner)
+// path never appears to spill out onto grass. The slab width is a
+// constant across all path styles — when two corridors of the SAME
+// width meet at a right angle they form a perfectly clean L-corner,
+// so no extra disc / pad is needed at the junction.
+const GROUND_CORRIDOR_WIDTH  = 2.20;     // metres — uniform for every edge
+const GROUND_CORRIDOR_END    = 1.20;     // metres extra at each end so the
+                                         // rectangle fully covers the
+                                         // perpendicular corridor at corners
 const GROUND_CORRIDOR_THICK  = 0.04;
-const GROUND_PAD_RADIUS      = 1.60;     // covers any corridor half-width
-                                         // + a small margin
-function buildPathGroundCorridor(a, b, type = "primary") {
-  const style = PATH_STYLE[type] ?? PATH_STYLE.primary;
+function buildPathGroundCorridor(a, b /*, type */) {
   const ax = offsetX(a.x), az = offsetZ(a.z);
   const bx = offsetX(b.x), bz = offsetZ(b.z);
   const dx = bx - ax, dz = bz - az;
@@ -474,10 +466,9 @@ function buildPathGroundCorridor(a, b, type = "primary") {
   // very short edge.
   const overshoot = Math.min(GROUND_CORRIDOR_END, len * 0.6);
   const corridorLen = len + overshoot * 2;
-  const corridorW = style.width + GROUND_CORRIDOR_SIDE * 2;
 
   const slab = new THREE.Mesh(
-    new THREE.BoxGeometry(corridorLen, GROUND_CORRIDOR_THICK, corridorW),
+    new THREE.BoxGeometry(corridorLen, GROUND_CORRIDOR_THICK, GROUND_CORRIDOR_WIDTH),
     terrainPlazaMat,
   );
   slab.position.set(
@@ -489,27 +480,6 @@ function buildPathGroundCorridor(a, b, type = "primary") {
   slab.rotation.y = Math.atan2(-dz, dx);
   slab.receiveShadow = true;
   return slab;
-}
-
-// Round beige disc placed at every waypoint. Wider than any corridor
-// that meets it, so L-junctions read as smooth rounded corners
-// instead of two overlapping rectangles with mismatched widths.
-function buildWaypointGroundPad(wp) {
-  const cx = offsetX(wp.x);
-  const cz = offsetZ(wp.z);
-  const disc = new THREE.Mesh(
-    new THREE.CylinderGeometry(GROUND_PAD_RADIUS, GROUND_PAD_RADIUS, GROUND_CORRIDOR_THICK, 24),
-    terrainPlazaMat,
-  );
-  // Sit at the same Y as the corridors with a hair more lift to win
-  // the depth-buffer tie at the overlap.
-  disc.position.set(
-    cx,
-    PLATFORM_Y + PLATFORM_H - GROUND_CORRIDOR_THICK / 2 + 0.001,
-    cz,
-  );
-  disc.receiveShadow = true;
-  return disc;
 }
 
 // 3D box slab from waypoint A to waypoint B. Style hierarchy matches the
