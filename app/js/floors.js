@@ -1097,6 +1097,10 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
     sharedEdges, doorsForRoom, isRoofed: isStandaloneRoofed,
   });
 
+  // --- Balconies (wrap-around verandas) — floor 1 open, floor 2 fenced ---
+  addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
+                    sharedEdges, doorsForRoom);
+
   // --- Silhouette outline on the walls ---
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(walls.geometry, 1),
@@ -2928,4 +2932,207 @@ export function tryReplaceWithFBX(loader, floorId, floorGroups, url) {
       }
     );
   });
+}
+
+// ============================================================
+//  BalconyDetails — wrap-around veranda on every external wall
+//  ----------------------------------------------------------
+//  Built per room on both floors. Reuses the existing wall + roof
+//  geometry; this layer only adds the four veranda parts:
+//    1. Balcony floor   — thin slab projecting out from the wall.
+//    2. Support columns — dark cylinders standing on the balcony
+//                         floor, drawn as a single InstancedMesh
+//                         per room.
+//    3. Shade canopy    — thin slab at the wall-top level, slightly
+//                         wider than the floor for a small eave.
+//    4. Fence rails     — top rail + bottom rail + balusters around
+//                         the perimeter, connecting the columns.
+//                         FLOOR 2 ONLY — the floor-1 balcony is
+//                         intentionally open so doorways aren't
+//                         enclosed.
+//
+//  Edges skipped:
+//    · shorter than BALCONY_MIN_EDGE_LEN
+//    · shared with another room in the same building (internal walls)
+//    · the Wrestling open yard (room.open) skips the whole pass
+//  Columns within BALCONY_DOOR_CLEARANCE of a door position are also
+//  skipped so doorways stay clear.
+//
+//  Toggle:
+//    SHOW_BALCONIES = false  to drop the whole layer.
+// ============================================================
+const SHOW_BALCONIES             = true;
+
+const BALCONY_FLOOR_DEPTH        = 0.85;
+const BALCONY_FLOOR_H            = 0.05;
+const BALCONY_SHADE_DEPTH        = 0.95;
+const BALCONY_SHADE_H            = 0.05;
+const BALCONY_COLUMN_RADIUS      = 0.08;
+const BALCONY_COLUMN_SPACING     = 1.50;
+const BALCONY_DOOR_CLEARANCE     = 0.70;
+const BALCONY_MIN_EDGE_LEN       = 1.50;
+const BALCONY_RAIL_THICK         = 0.045;
+const BALCONY_RAIL_TOP_OFFSET    = 0.58;   // metres above balcony floor
+const BALCONY_RAIL_BOT_OFFSET    = 0.08;
+const BALCONY_BALUSTER_GAP       = 0.30;
+
+const balconyFloorMat = new THREE.MeshStandardMaterial({
+  color: 0xc7b88f, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const balconyShadeMat = new THREE.MeshStandardMaterial({
+  color: 0xb59e76, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const balconyColumnMat = new THREE.MeshStandardMaterial({
+  color: 0x3d2210, roughness: 0.85, metalness: 0, flatShading: true,
+});
+const balconyFenceMat = new THREE.MeshStandardMaterial({
+  color: 0x3d2210, roughness: 0.85, metalness: 0, flatShading: true,
+});
+
+function addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
+                           sharedEdges, doorsForRoom = []) {
+  if (!SHOW_BALCONIES) return;
+  if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
+  // Open yards have no walls to wrap a balcony around.
+  if (room.open) return;
+
+  const areaSign  = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
+  const isFloor1  = room.floor === 1;
+  const wallTopY  = wallsBaseY + wallHeight;
+  const colHeight = wallHeight - BALCONY_FLOOR_H - BALCONY_SHADE_H;
+  const colCenterY = wallsBaseY + BALCONY_FLOOR_H + colHeight / 2;
+
+  const doorPositions = (doorsForRoom || []).map(
+    (d) => [offsetX(d.x), offsetZ(d.z)],
+  );
+
+  const columnPositions = [];
+  const tmpMat = new THREE.Matrix4();
+
+  for (let i = 0; i < polygonLocal.length; i++) {
+    const [ax, az] = polygonLocal[i];
+    const [bx, bz] = polygonLocal[(i + 1) % polygonLocal.length];
+    const ex = bx - ax, ez = bz - az;
+    const edgeLen = Math.hypot(ex, ez);
+    if (edgeLen < BALCONY_MIN_EDGE_LEN) continue;
+    // Suppress on shared internal walls (between rooms in the same building).
+    if (sharedEdges && Array.isArray(room.polygon) &&
+        sharedEdges.has(edgeKey(
+          room.polygon[i],
+          room.polygon[(i + 1) % room.polygon.length],
+        ))) continue;
+
+    const ux = ex / edgeLen, uz = ez / edgeLen;
+    const nx = (ez / edgeLen) * areaSign;
+    const nz = (-ex / edgeLen) * areaSign;
+    // Box's long axis is +X; this yaw maps +X to (ux, uz).
+    const boxYaw = Math.atan2(-uz, ux);
+
+    // 1. Balcony floor — thin slab projecting BALCONY_FLOOR_DEPTH outward.
+    const floorCx = ax + ex / 2 + nx * (BALCONY_FLOOR_DEPTH / 2);
+    const floorCz = az + ez / 2 + nz * (BALCONY_FLOOR_DEPTH / 2);
+    const flr = new THREE.Mesh(
+      new THREE.BoxGeometry(edgeLen, BALCONY_FLOOR_H, BALCONY_FLOOR_DEPTH),
+      balconyFloorMat,
+    );
+    flr.position.set(floorCx, wallsBaseY + BALCONY_FLOOR_H / 2, floorCz);
+    flr.rotation.y = boxYaw;
+    flr.castShadow = true;
+    flr.receiveShadow = true;
+    group.add(flr);
+
+    // 3. Shade canopy at wall-top, slightly wider than the floor (eave).
+    const shadeCx = ax + ex / 2 + nx * (BALCONY_SHADE_DEPTH / 2);
+    const shadeCz = az + ez / 2 + nz * (BALCONY_SHADE_DEPTH / 2);
+    const shade = new THREE.Mesh(
+      new THREE.BoxGeometry(edgeLen, BALCONY_SHADE_H, BALCONY_SHADE_DEPTH),
+      balconyShadeMat,
+    );
+    shade.position.set(shadeCx, wallTopY - BALCONY_SHADE_H / 2, shadeCz);
+    shade.rotation.y = boxYaw;
+    shade.castShadow = true;
+    shade.receiveShadow = true;
+    group.add(shade);
+
+    // 2. Columns — distributed along the outer edge of the balcony.
+    const colOutset = BALCONY_FLOOR_DEPTH - BALCONY_COLUMN_RADIUS - 0.05;
+    const colCount  = Math.max(2, Math.round(edgeLen / BALCONY_COLUMN_SPACING) + 1);
+    for (let j = 0; j < colCount; j++) {
+      const t = j / (colCount - 1);
+      const px = ax + ex * t + nx * colOutset;
+      const pz = az + ez * t + nz * colOutset;
+      // Skip if a doorway sits behind this column.
+      let nearDoor = false;
+      for (const [dx, dz] of doorPositions) {
+        if (Math.hypot(dx - px, dz - pz) < BALCONY_DOOR_CLEARANCE) {
+          nearDoor = true; break;
+        }
+      }
+      if (nearDoor) continue;
+      columnPositions.push([px, pz]);
+    }
+
+    // 4. Fence rails + balusters — FLOOR 2 ONLY so floor-1 doorways
+    //    aren't enclosed.
+    if (!isFloor1) {
+      const railOutset = BALCONY_FLOOR_DEPTH - 0.05;
+      const railCx = ax + ex / 2 + nx * railOutset;
+      const railCz = az + ez / 2 + nz * railOutset;
+      const topY = wallsBaseY + BALCONY_FLOOR_H + BALCONY_RAIL_TOP_OFFSET;
+      const botY = wallsBaseY + BALCONY_FLOOR_H + BALCONY_RAIL_BOT_OFFSET;
+
+      const topRail = new THREE.Mesh(
+        new THREE.BoxGeometry(edgeLen, BALCONY_RAIL_THICK, BALCONY_RAIL_THICK),
+        balconyFenceMat,
+      );
+      topRail.position.set(railCx, topY, railCz);
+      topRail.rotation.y = boxYaw;
+      topRail.castShadow = true;
+      group.add(topRail);
+
+      const botRail = new THREE.Mesh(
+        new THREE.BoxGeometry(edgeLen, BALCONY_RAIL_THICK, BALCONY_RAIL_THICK),
+        balconyFenceMat,
+      );
+      botRail.position.set(railCx, botY, railCz);
+      botRail.rotation.y = boxYaw;
+      botRail.castShadow = true;
+      group.add(botRail);
+
+      const baluCount = Math.max(2, Math.round(edgeLen / BALCONY_BALUSTER_GAP));
+      const baluH = BALCONY_RAIL_TOP_OFFSET - BALCONY_RAIL_BOT_OFFSET;
+      const baluY = (topY + botY) / 2;
+      const baluThick = BALCONY_RAIL_THICK * 0.6;
+      for (let j = 0; j <= baluCount; j++) {
+        const t = j / baluCount;
+        const bx2 = ax + ex * t + nx * railOutset;
+        const bz2 = az + ez * t + nz * railOutset;
+        const balu = new THREE.Mesh(
+          new THREE.BoxGeometry(baluThick, baluH, baluThick),
+          balconyFenceMat,
+        );
+        balu.position.set(bx2, baluY, bz2);
+        balu.rotation.y = boxYaw;
+        group.add(balu);
+      }
+    }
+  }
+
+  // Emit the room's columns as one InstancedMesh.
+  if (columnPositions.length > 0) {
+    const colGeo = new THREE.CylinderGeometry(
+      BALCONY_COLUMN_RADIUS, BALCONY_COLUMN_RADIUS, colHeight, 8,
+    );
+    const inst = new THREE.InstancedMesh(
+      colGeo, balconyColumnMat, columnPositions.length,
+    );
+    for (let k = 0; k < columnPositions.length; k++) {
+      tmpMat.makeTranslation(columnPositions[k][0], colCenterY, columnPositions[k][1]);
+      inst.setMatrixAt(k, tmpMat);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    inst.castShadow = true;
+    inst.receiveShadow = true;
+    group.add(inst);
+  }
 }
