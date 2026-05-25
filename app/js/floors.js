@@ -1364,6 +1364,12 @@ const TREE_LEAF_COLORS = [
   0x4A7C3E, 0x5CBF4A, 0x6FAE5B, 0x3B6B34, 0x547F43,
 ];
 const TREE_TRUNK_COLOR = 0x5A3A23;
+// Global multiplier applied on top of the per-instance scale. The
+// reference-sheet heights (A=4.5 m, B=3.0 m, etc.) are tuned for a
+// site-scale lawn; inside the small plaza grass patches they need
+// to be much smaller. Bump this toward 1.0 for big trees, toward
+// 0.2 for tiny ones.
+const TREE_GLOBAL_SCALE = 0.30;
 // Trees sit on the raised plaza grass patches, not the lower lawn.
 // Patch top Y = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT = 0.13.
 const TREE_BASE_Y      = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT;
@@ -1490,7 +1496,7 @@ function addReferenceTrees(root) {
 
     for (let i = 0; i < trees.length; i++) {
       const t = trees[i];
-      const scaleVar = (t.s ?? 1) * (0.94 + Math.random() * 0.12);
+      const scaleVar = (t.s ?? 1) * TREE_GLOBAL_SCALE * (0.94 + Math.random() * 0.12);
       const rotVar   = (t.r ?? 0) + (Math.random() - 0.5) * 0.4;
       pos.set(t.x - planCenter.x, TREE_BASE_Y, t.z - planCenter.z);
       quat.setFromAxisAngle(up, rotVar);
