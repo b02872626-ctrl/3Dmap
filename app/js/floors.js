@@ -849,8 +849,68 @@ function _makeWallPlasterTexture() {
   return tex;
 }
 
+// Cobblestone texture for the plaza paving — jittered grid of irregular
+// grey stones with darker mortar between them. One 512×512 canvas tiles
+// across world space via RepeatWrapping; the outer + inner plaza both
+// reuse this source.
+function _makeCobblestoneTexture() {
+  const c = document.createElement("canvas");
+  c.width  = 512;
+  c.height = 512;
+  const ctx = c.getContext("2d");
+  // Dark mortar base
+  ctx.fillStyle = "#3a3a3c";
+  ctx.fillRect(0, 0, 512, 512);
+  // Jittered grid of cobbles. cellSize chosen so a stone is roughly
+  // 1/3 m at COBBLE_SCALE=4 m per repeat.
+  const cellSize = 46;
+  const cols = Math.ceil(512 / cellSize) + 1;
+  const rows = Math.ceil(512 / cellSize) + 1;
+  for (let cy = -1; cy < rows; cy++) {
+    for (let cx = -1; cx < cols; cx++) {
+      const jx = (Math.random() - 0.5) * cellSize * 0.45;
+      const jy = (Math.random() - 0.5) * cellSize * 0.45;
+      const x = cx * cellSize + cellSize / 2 + jx;
+      const y = cy * cellSize + cellSize / 2 + jy;
+      const r = cellSize * (0.42 + Math.random() * 0.10);
+      // Stone shade: medium-light grey with small variance per stone
+      const base = 132 + Math.floor(Math.random() * 58);
+      const rr = Math.max(0, Math.min(255, base + (Math.random() - 0.5) * 16));
+      const gg = Math.max(0, Math.min(255, base + (Math.random() - 0.5) * 16));
+      const bb = Math.max(0, Math.min(255, base + (Math.random() - 0.5) * 18));
+      const ang = Math.random() * Math.PI;
+      ctx.fillStyle = `rgb(${rr|0}, ${gg|0}, ${bb|0})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y,
+        r * (0.92 + Math.random() * 0.12),
+        r * (0.82 + Math.random() * 0.16),
+        ang, 0, Math.PI * 2);
+      ctx.fill();
+      // Subtle top-left highlight on each stone
+      ctx.fillStyle = "rgba(255,255,255,0.07)";
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.28, y - r * 0.28,
+        r * 0.38, r * 0.22, ang, 0, Math.PI * 2);
+      ctx.fill();
+      // Faint bottom-right shadow
+      ctx.fillStyle = "rgba(0,0,0,0.10)";
+      ctx.beginPath();
+      ctx.ellipse(x + r * 0.30, y + r * 0.30,
+        r * 0.32, r * 0.18, ang, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 const ROOF_TILE_TEX     = _makeRoofTileTexture();
 const WALL_PLASTER_TEX  = _makeWallPlasterTexture();
+const COBBLE_TEX        = _makeCobblestoneTexture();
+// Metres of world space per one full texture repeat.
+const COBBLE_SCALE      = 4.0;
 
 // World-space repeat lengths — texture tiles every N metres regardless
 // of the geometry's UV layout.
@@ -882,9 +942,7 @@ const lpRoofMat = new THREE.MeshStandardMaterial({
 const terrainGrassMat = new THREE.MeshStandardMaterial({
   color: TERRAIN_GRASS, roughness: 1.0, metalness: 0, flatShading: true,
 });
-const terrainPlazaMat = new THREE.MeshStandardMaterial({
-  color: TERRAIN_PLAZA, roughness: 0.95, metalness: 0, flatShading: true,
-});
+// terrainPlazaMat is defined later, once SITE_PLAZA dims are known.
 
 // Build a large grass plane + per-building paved platforms. Matches the
 // reference site plan: each building sits on its own paved platform with
@@ -910,6 +968,20 @@ const SITE_PLAZA = {
 // buildings on it don't need to move; the box just extends DOWN to
 // the lowered grass level so its sides are visible as a raised step.
 const SITE_PLAZA_THICK = 1.60;
+
+// Outer plaza uses a cloned cobblestone texture so its repeat can be
+// set independently of the inner plaza. BoxGeometry's top face has UVs
+// in 0..1, so we scale repeat by the plaza's world dimensions.
+const OUTER_PLAZA_COBBLE_TEX = COBBLE_TEX.clone();
+OUTER_PLAZA_COBBLE_TEX.needsUpdate = true;
+OUTER_PLAZA_COBBLE_TEX.repeat.set(
+  (SITE_PLAZA.maxX - SITE_PLAZA.minX) / COBBLE_SCALE,
+  (SITE_PLAZA.maxZ - SITE_PLAZA.minZ) / COBBLE_SCALE,
+);
+const terrainPlazaMat = new THREE.MeshStandardMaterial({
+  color: 0xb8b6b3, map: OUTER_PLAZA_COBBLE_TEX,
+  roughness: 0.95, metalness: 0, flatShading: true,
+});
 
 function buildSitePlaza() {
   const w = SITE_PLAZA.maxX - SITE_PLAZA.minX;
@@ -944,8 +1016,15 @@ const INNER_PLAZA_CORRIDOR_W = 2.0;  // metres wide for path strips
 const INNER_PLAZA_NODE_R    = 1.2;   // metres radius for waypoint discs
 const INNER_PLAZA_NODE_SEG  = 16;    // disc tessellation
 
+// Inner plaza uses ExtrudeGeometry, whose top-face UVs equal the
+// polygon's local 2D coords in metres. Scale repeat by 1/COBBLE_SCALE
+// so the texture tiles every COBBLE_SCALE metres of world space.
+const INNER_PLAZA_COBBLE_TEX = COBBLE_TEX.clone();
+INNER_PLAZA_COBBLE_TEX.needsUpdate = true;
+INNER_PLAZA_COBBLE_TEX.repeat.set(1 / COBBLE_SCALE, 1 / COBBLE_SCALE);
 const innerPlazaMat = new THREE.MeshStandardMaterial({
-  color: 0xe1cda7, roughness: 0.92, metalness: 0, flatShading: true,
+  color: 0xbab8b5, map: INNER_PLAZA_COBBLE_TEX,
+  roughness: 0.92, metalness: 0, flatShading: true,
 });
 
 // Build an extruded polygon piece in non-indexed form so all pieces
