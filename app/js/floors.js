@@ -4072,7 +4072,8 @@ function addExteriorDetails(root) {
   try { addExteriorLampPosts(root); }       catch (e) { console.error("lamp posts:", e); }
   try { addExteriorEntranceGate(root); }    catch (e) { console.error("entrance gate:", e); }
   try { addExteriorBenches(root); }         catch (e) { console.error("benches:", e); }
-  try { addExteriorFlagpoles(root); }       catch (e) { console.error("flagpoles:", e); }
+  // Flagpoles disabled at user request. Re-enable by uncommenting:
+  // try { addExteriorFlagpoles(root); }    catch (e) { console.error("flagpoles:", e); }
   try { addExteriorHedges(root); }          catch (e) { console.error("hedges:", e); }
   try { addExteriorFloweringShrubs(root); } catch (e) { console.error("shrubs:", e); }
   try { addExteriorSignage(root); }         catch (e) { console.error("signage:", e); }
