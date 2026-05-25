@@ -423,7 +423,7 @@ function buildSitumFloor(group, floor, roomGroups) {
 const PATH_COLOR        = 0xc8b893;   // primary spine — warm flagstone
 const PATH_COLOR_LIGHT  = 0xd9cba8;   // secondary connector — paler stone
 const PATH_THICK        = 0.10;
-const PATH_LIFT         = 0.42;
+const PATH_LIFT         = 1.02;
 const PATH_OUTLINE      = 0x6e6249;   // mortar / shadow line between tiles
 const WAYPOINT_COLOR    = 0xffd400;
 const MAJOR_STOP_COLOR  = 0xff6b3d;   // orange — stands out against stone
@@ -676,7 +676,7 @@ function buildLamppost(cx, cz_y, cz) {
 }
 
 const SITUM_BLOCK_HEIGHT = 1.6;   // height of each room's 3D block (fallback path only)
-const SITUM_BLOCK_LIFT   = 0.37;  // sit on top of the inner plaza (outer plaza 0.07 + INNER_PLAZA_LIFT 0.30)
+const SITUM_BLOCK_LIFT   = 0.97;  // sit on top of the inner plaza (outer plaza 0.07 + INNER_PLAZA_LIFT 0.90)
 const SITUM_TILE_HEIGHT  = 0.12;  // colored floor tile thickness
 const SITUM_WALL_HEIGHT  = 1.85;  // beige perimeter walls
 const SITUM_WALL_THICK   = 0.22;
@@ -938,7 +938,7 @@ function buildSitePlaza() {
 //     two corridors meet.
 // Each piece is extruded by INNER_PLAZA_LIFT, then everything is
 // merged with BufferGeometryUtils into one mesh + one material.
-const INNER_PLAZA_LIFT      = 0.30;
+const INNER_PLAZA_LIFT      = 0.90;
 const INNER_PLAZA_PAD       = 1.4;   // metres around each building polygon
 const INNER_PLAZA_CORRIDOR_W = 2.0;  // metres wide for path strips
 const INNER_PLAZA_NODE_R    = 1.2;   // metres radius for waypoint discs
