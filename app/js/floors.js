@@ -95,44 +95,35 @@ export function buildFloors() {
   // floor views. Sits below all floor groups; individual floors layer
   // their own platforms / buildings on top.
   if (isSitum) {
+    // All scene-root outdoor pieces (lawn backdrop, trees, lamps, gate,
+    // benches, hedges, shrubs, etc.) live inside a single wrapper
+    // group tagged so main.js can hide it whenever the user toggles
+    // a specific floor (only the chosen floor's rooms stay visible).
+    const sceneOutdoorDecor = new THREE.Group();
+    sceneOutdoorDecor.name = "scene-outdoor-decor";
+    sceneOutdoorDecor.userData.kind = "sceneOutdoorDecor";
+    root.add(sceneOutdoorDecor);
+
     const grassBG = new THREE.Mesh(
       new THREE.PlaneGeometry(260, 260),
       terrainGrassMat,
     );
     grassBG.rotation.x = -Math.PI / 2;
-    // Grass sits well below ground so the site plaza reads as a
-    // visibly raised stone block above the surrounding lawn. Matches
-    // the plaza bottom (PLATFORM_Y + PLATFORM_H − SITE_PLAZA_THICK).
     grassBG.position.set(0, -1.55, 0);
     grassBG.receiveShadow = true;
     grassBG.userData.kind = "grass-bg";
-    root.add(grassBG);
+    sceneOutdoorDecor.add(grassBG);
 
-    // Sparse landscape decoration (trees) at hand-picked positions in
-    // open grass outside the building cluster. Edit LANDSCAPE_DECOR =
-    // false (top of file) to turn off, or trim the positions array in
-    // addLandscapeDecor() to reduce density.
-    if (LANDSCAPE_DECOR) addLandscapeDecor(root);
-    // Reference-sheet trees — five types in instanced clusters around
-    // the plaza perimeter. Wrapped in try/catch so a tree-builder
-    // failure (e.g. BufferGeometryUtils API drift) can't take down
-    // the whole render loop.
+    if (LANDSCAPE_DECOR) addLandscapeDecor(sceneOutdoorDecor);
     try {
-      addReferenceTrees(root);
+      addReferenceTrees(sceneOutdoorDecor);
     } catch (err) {
       console.error("addReferenceTrees failed:", err);
     }
-
-    // Subtle low-poly grass color patches for ground variation.
-    if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
-
-    // Outer-lawn meandering pavement disabled — re-enable with
-    // addOuterLawnPavement(root) once a target location is confirmed.
-
-    // Lamp posts, entrance gate, benches, flagpoles, hedges, flowering
-    // shrubs and signage posts — see addExteriorDetails for the
-    // breakdown. Wrapped in its own try/catch internally per builder.
-    addExteriorDetails(root);
+    if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) {
+      addGroundGrassPatches(sceneOutdoorDecor);
+    }
+    addExteriorDetails(sceneOutdoorDecor);
   }
 
   for (const floor of FLOORS) {
@@ -335,20 +326,25 @@ function loadSvgAsCanvasTexture(url, texture) {
 //  Situm-style floor: SVG texture plane + extruded room blocks
 // =============================================================
 function buildSitumFloor(group, floor, roomGroups) {
-  // Per-building paved platforms — floor 1 only. The grass BG is
-  // attached at scene level so it's visible under any floor selection.
+  // Everything on this floor that ISN'T a room block — plaza paving,
+  // podium, staircases, roads, painted path strips, waypoint markers,
+  // door pins, path curbs, stair zones — goes into this sub-group so
+  // the floor switcher can hide it when the user toggles a single
+  // floor and wants to see only that floor's rooms.
+  const floorOutdoorDecor = new THREE.Group();
+  floorOutdoorDecor.userData.kind = "floorOutdoorDecor";
+  group.add(floorOutdoorDecor);
+
+  // Per-building paved platforms — floor 1 only.
   if (floor.id === 1) {
-    addOutdoorTerrain(group);
+    addOutdoorTerrain(floorOutdoorDecor);
   }
 
-  // Roads — only on the ground floor. Each road carries a `points`
-  // polygon traced from the SVG's hatched paving outline. We extrude
-  // that as a thin slab so the road's outline matches the painted
-  // paving, not just its bbox.
+  // Roads — only on the ground floor.
   if (floor.id === 1 && ROADS && ROADS.length) {
     for (const road of ROADS) {
       const slab = buildRoadSlab(road);
-      if (slab) group.add(slab);
+      if (slab) floorOutdoorDecor.add(slab);
     }
   }
 
@@ -379,33 +375,25 @@ function buildSitumFloor(group, floor, roomGroups) {
     roomGroups.push(rg);
   }
 
-  // Outdoor walking network — ground floor only. Primary spine,
-  // secondary connectors, and dashed recommended-return loop.
+  // Outdoor walking network — ground floor only.
   if (floor.id === 1 && WAYPOINTS && WAYPOINTS.length) {
     const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
-    // Beige ground corridors UNDER each path edge — extends the paved
-    // ground along the walking routes so paths never appear to float
-    // on the grass. Uniform width means L-junctions are clean without
-    // any extra pad geometry.
     for (const edge of WAYPOINT_EDGES) {
       const [aId, bId, type = "primary"] = edge;
       const a = wpById.get(aId), b = wpById.get(bId);
       if (!a || !b) continue;
       const corridor = buildPathGroundCorridor(a, b, type);
-      if (corridor) group.add(corridor);
+      if (corridor) floorOutdoorDecor.add(corridor);
     }
     for (const edge of WAYPOINT_EDGES) {
       const [aId, bId, type = "primary"] = edge;
       const a = wpById.get(aId), b = wpById.get(bId);
       if (!a || !b) continue;
-      group.add(buildPathStrip(a, b, type));
+      floorOutdoorDecor.add(buildPathStrip(a, b, type));
     }
-    // Only render the numbered major stops as disks. The minor yellow
-    // junction dots were visual clutter once the path strips read as
-    // proper paving — skip them.
     for (const wp of WAYPOINTS) {
       if (!wp.major) continue;
-      group.add(buildWaypointDot(wp));
+      floorOutdoorDecor.add(buildWaypointDot(wp));
     }
   }
 
@@ -413,18 +401,18 @@ function buildSitumFloor(group, floor, roomGroups) {
   if (floor.id === 1 && DOORS && DOORS.length) {
     for (const door of DOORS) {
       if (door.floor !== 1) continue;
-      group.add(buildDoorMarker(door));
+      floorOutdoorDecor.add(buildDoorMarker(door));
     }
   }
 
-  // Zone-based facade pass (off by default; see SHOW_FACADE_DETAILS /
-  // SHOW_FACADE_DEBUG and FACADE_ZONES at the bottom of this file).
+  // Zone-based facade pass — sits on building walls, stays in room
+  // territory rather than the outdoor-decor group.
   addFacadeFromZones(group, floor);
 
   // GroundSurfaceDetails — path curbs + stair zones (ground floor only).
   if (SHOW_GROUND_DETAILS && floor.id === 1) {
-    if (SHOW_CURBS)         addPathCurbsForFloor(group);
-    if (SHOW_STAIR_DETAILS) addStairZonesForFloor(group, floor.id);
+    if (SHOW_CURBS)         addPathCurbsForFloor(floorOutdoorDecor);
+    if (SHOW_STAIR_DETAILS) addStairZonesForFloor(floorOutdoorDecor, floor.id);
   }
 }
 

@@ -66,6 +66,17 @@ function applyFloorLayout() {
     group.userData.targetY = y;
     y += gap;
   }
+  // Toggle outdoor decor: shown only in All view. Single-floor views
+  // hide the lawn, trees, lamps, gate, plaza, paths, waypoint markers,
+  // door pins, etc., so the user sees ONLY the chosen floor's rooms.
+  const isAll = activeFloor === "all";
+  const sceneDecor = root.getObjectByName("scene-outdoor-decor");
+  if (sceneDecor) sceneDecor.visible = isAll;
+  for (const fg of floorGroups.values()) {
+    fg.children.forEach((c) => {
+      if (c.userData?.kind === "floorOutdoorDecor") c.visible = isAll;
+    });
+  }
   // Three modes drive the floor-1 roof + interior:
   //  · Ground-Floor view (activeFloor === 1):
   //      roofs HIDDEN entirely, interior SHOWN.
