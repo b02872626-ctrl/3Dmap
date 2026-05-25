@@ -14,15 +14,16 @@ const PATH_COLOR     = 0xff4d6a;   // brand magenta
 const PATH_ACCENT    = 0xfff4b3;   // arrow yellow
 const START_COLOR    = 0x4ade80;   // green
 const END_COLOR      = 0xff4d6a;   // magenta
-// Route renders just above the outdoor path strips (floors.js PATH_LIFT
-// ≈ 0.12, PATH_THICK ≈ 0.06 → road top at y ≈ 0.15). Keep route pieces
-// hugging the floor so they read like a painted route, not a hovering
-// tube above the painted paths.
-const ROUTE_Y_TUBE   = 0.22;
-const ROUTE_Y_ARROW  = 0.30;
-const ROUTE_Y_DISC   = 0.20;
-const ROUTE_Y_MARKER = 0.18;
-const ROUTE_Y_STEP   = 0.35;
+// Route renders just above the outdoor path strips. The inner plaza
+// was raised in floors.js (top at y ≈ 0.97) and path strips now sit
+// at y ≈ 1.02 + half their thickness ≈ 1.07. The constants below put
+// every route piece a few cm above that so the painted route reads
+// on top of the plaza paving instead of being buried under it.
+const ROUTE_Y_TUBE   = 1.18;
+const ROUTE_Y_ARROW  = 1.24;
+const ROUTE_Y_DISC   = 1.16;
+const ROUTE_Y_MARKER = 1.14;
+const ROUTE_Y_STEP   = 1.30;
 
 export function createRouteLayer(scene, floorGroups) {
   const root = new THREE.Group();
