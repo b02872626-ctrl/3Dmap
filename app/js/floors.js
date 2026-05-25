@@ -1994,6 +1994,12 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
                     sharedEdges, doorsForRoom);
 
+  // --- Museum-style interiors — visible when the top is open. ---
+  if (exposedTop) {
+    addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
+                             wallsBaseY, wallHeight);
+  }
+
   // --- Silhouette outline on the walls ---
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(walls.geometry, 1),
@@ -2140,6 +2146,137 @@ function ornamentArchway(cx, cz, baseY) {
   const top = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.06, 0.06), lpOrnamentStone);
   top.position.set(cx, baseY + 0.33, cz); grp.add(top);
   return grp;
+}
+
+// -----------------------------------------------------------------
+//  Aba Jifar room interiors — visible when the ground-floor rooms
+//  render with open tops (no roof, no wall cap). A small museum-style
+//  vignette per room: a category-themed centerpiece ornament, framed
+//  artwork on the external walls, and a single bench leaning against
+//  the longest external wall.
+// -----------------------------------------------------------------
+const interiorFrameMat = new THREE.MeshStandardMaterial({
+  color: 0x2a1c12, roughness: 0.78, metalness: 0, flatShading: true,
+});
+const interiorTrimMat  = new THREE.MeshStandardMaterial({
+  color: 0xc89a3d, roughness: 0.45, metalness: 0.55, flatShading: true,
+});
+const interiorBenchMat = new THREE.MeshStandardMaterial({
+  color: 0x6b432a, roughness: 0.85, metalness: 0, flatShading: true,
+});
+const interiorPedestalMat = new THREE.MeshStandardMaterial({
+  color: 0xb9af9a, roughness: 0.92, metalness: 0, flatShading: true,
+});
+
+function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
+                                  wallsBaseY, wallHeight) {
+  if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
+  if (room.open) return;
+
+  // Polygon centroid (local plan-centred coords) — used to anchor the
+  // centerpiece and as the reference for "inward" wall normals.
+  let cx = 0, cz = 0;
+  for (const [x, z] of polygonLocal) { cx += x; cz += z; }
+  cx /= polygonLocal.length;
+  cz /= polygonLocal.length;
+
+  // 1. Small stone pedestal at the centroid, with the existing
+  //    category-themed ornament sitting on top.
+  const PEDESTAL_W = 0.45;
+  const PEDESTAL_H = 0.35;
+  const ped = new THREE.Mesh(
+    new THREE.BoxGeometry(PEDESTAL_W, PEDESTAL_H, PEDESTAL_W),
+    interiorPedestalMat,
+  );
+  ped.position.set(cx, wallsBaseY + PEDESTAL_H / 2, cz);
+  ped.castShadow = true;
+  ped.receiveShadow = true;
+  group.add(ped);
+
+  const ornament = buildRoomOrnament(room, cx, cz, wallsBaseY + PEDESTAL_H);
+  if (ornament) group.add(ornament);
+
+  // 2. Walk polygon edges — paintings on each non-shared (external)
+  //    edge, and one bench against the first long external wall.
+  const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
+  let benchPlaced = false;
+
+  for (let i = 0; i < polygonLocal.length; i++) {
+    const [ax, az] = polygonLocal[i];
+    const [bx, bz] = polygonLocal[(i + 1) % polygonLocal.length];
+    const ex = bx - ax, ez = bz - az;
+    const edgeLen = Math.hypot(ex, ez);
+    if (edgeLen < 1.2) continue;
+
+    // Skip walls shared with another room — those are internal dividers.
+    if (sharedEdges && Array.isArray(room.polygon) &&
+        sharedEdges.has(edgeKey(
+          room.polygon[i],
+          room.polygon[(i + 1) % room.polygon.length],
+        ))) continue;
+
+    const ux = ex / edgeLen, uz = ez / edgeLen;
+    // Inward normal (toward the polygon interior).
+    const inwardX = -uz * areaSign;
+    const inwardZ =  ux * areaSign;
+    const mx = ax + ex / 2;
+    const mz = az + ez / 2;
+
+    // --- Framed painting at wall-mid height, slightly inset so the
+    //     trim doesn't z-fight the wall face. ---
+    const paintW = Math.min(0.7, edgeLen * 0.35);
+    const paintH = 0.42;
+    const paintY = wallsBaseY + wallHeight * 0.58;
+    const paintInset = 0.04;
+    const ppx = mx + inwardX * paintInset;
+    const ppz = mz + inwardZ * paintInset;
+    const paintYaw = Math.atan2(inwardX, inwardZ);
+
+    const trim = new THREE.Mesh(
+      new THREE.PlaneGeometry(paintW + 0.08, paintH + 0.08),
+      interiorTrimMat,
+    );
+    trim.position.set(ppx, paintY, ppz);
+    trim.rotation.y = paintYaw;
+    group.add(trim);
+
+    const canvas = new THREE.Mesh(
+      new THREE.PlaneGeometry(paintW, paintH),
+      interiorFrameMat,
+    );
+    canvas.position.set(
+      ppx + inwardX * 0.004,
+      paintY,
+      ppz + inwardZ * 0.004,
+    );
+    canvas.rotation.y = paintYaw;
+    group.add(canvas);
+
+    // --- Bench against the first long external wall ---
+    if (!benchPlaced && edgeLen > 1.8) {
+      const benchW = Math.min(1.0, edgeLen * 0.55);
+      const benchH = 0.10;
+      const benchD = 0.30;
+      const benchY = wallsBaseY + 0.30;
+      const benchInset = 0.40;
+      const bcx = mx + inwardX * benchInset;
+      const bcz = mz + inwardZ * benchInset;
+      // Yaw chosen so the box's +X axis aligns with (ux, uz) — bench
+      // sits parallel to the wall.
+      const benchYaw = Math.atan2(-uz, ux);
+
+      const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(benchW, benchH, benchD),
+        interiorBenchMat,
+      );
+      seat.position.set(bcx, benchY, bcz);
+      seat.rotation.y = benchYaw;
+      seat.castShadow = true;
+      seat.receiveShadow = true;
+      group.add(seat);
+      benchPlaced = true;
+    }
+  }
 }
 
 // Push every polygon vertex outward from its centroid by `amount`. Used
