@@ -950,17 +950,35 @@ html, body {
 }
 .mobile-legend li.off { opacity: 0.4; }
 
+/* ---------- Mobile-only bottom Directions bar ---------- */
+.mobile-bottom-bar {
+  display: none;
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 11;
+  pointer-events: auto;
+}
+.mobile-bottom-bar .primary-btn {
+  height: 56px;
+  font-size: 16px;
+  box-shadow: 0 10px 28px rgba(255,77,106,0.40);
+}
+
 /* ---------- Activate mobile UI / hide desktop UI on touch ---------- */
 @media (max-width: 760px), (pointer: coarse) and (hover: none) {
-  .hamburger     { display: inline-flex; }
-  .mobile-drawer { display: flex; }
-  .mobile-scrim  { display: block; }
+  .hamburger        { display: inline-flex; }
+  .mobile-drawer    { display: flex; }
+  .mobile-scrim     { display: block; }
+  .mobile-bottom-bar { display: block; }
 
-  /* Hide everything desktop */
+  /* Hide topbar search + buttons + the desktop legend + directions sidebar
+     and the hover tooltip. KEEP the floor-switcher on the right side so
+     it's a quick one-handed reach. */
   .topbar .search,
   .topbar .topbar-btn,
   .legend,
-  .floor-switcher,
   .directions,
   .tooltip {
     display: none !important;
@@ -973,6 +991,26 @@ html, body {
   }
   .topbar .logo h1 { font-size: 13px; }
   .topbar .logo p  { font-size: 10px; }
+
+  /* Pull the floor switcher away from the bottom-bar / hamburger and
+     compact it for thumb reach. */
+  .floor-switcher {
+    top: auto;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    transform: none;
+    right: 12px;
+    padding: 6px;
+    gap: 4px;
+  }
+  .floor-switcher button { width: 48px; height: 48px; font-size: 15px; }
+
+  /* The drawer no longer needs the floor row — the side switcher
+     handles it. Same for the directions row, replaced by the
+     bottom-bar primary button. */
+  .mobile-drawer .mobile-section:has(.mobile-floors),
+  .mobile-drawer #mobile-directions {
+    display: none;
+  }
 
   /* Details panel becomes a bottom sheet, leaving room for the hamburger */
   .details {

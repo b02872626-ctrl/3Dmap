@@ -1151,6 +1151,11 @@ document.getElementById("mobile-directions")?.addEventListener("click", () => {
   setDrawerOpen(false);
   openDirections();
 });
+// Bottom-of-screen Directions bar (mobile only — display:none on desktop).
+document.getElementById("bottom-directions")?.addEventListener("click", () => {
+  setDrawerOpen(false);
+  openDirections();
+});
 document.getElementById("mobile-explode")?.addEventListener("click", () => {
   exploded = !exploded;
   document.getElementById("toggle-explode")?.classList.toggle("active", exploded);
