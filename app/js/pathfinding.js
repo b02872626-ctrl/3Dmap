@@ -25,10 +25,11 @@ const ELEVATOR_RIDE_COST = 18;  // "feels like" 18m of walking per floor change
 const BRIDGE_COST_FACTOR = 1.6; // penalty for synthesized corridor bridges
 // Through-building penalty. Multiplied onto any edge that walks INSIDE
 // a building — adjacent-room doorways and door↔door across a room.
-// High enough that the path-finder prefers outdoor walkways when they
-// exist, low enough that within-building routes still resolve when no
-// outdoor alternative is available.
-const THROUGH_BUILDING_COST_FACTOR = 4.0;
+// Set very high so the path-finder almost never threads a route
+// through a room when ANY outdoor walkway exists; through-room edges
+// remain in the graph only as a last-resort fallback for rooms with
+// no outdoor door.
+const THROUGH_BUILDING_COST_FACTOR = 200.0;
 
 const offsetX = (x) => x - PLAN_CENTER.x;
 const offsetZ = (z) => z - PLAN_CENTER.z;
