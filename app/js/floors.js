@@ -1225,6 +1225,119 @@ function buildStaircase(minX, maxX, topZ, bottomZ, steps = STAIR_STEPS) {
   return grp;
 }
 
+// -----------------------------------------------------------------
+//  Auto-aligned staircases. Sample the south face of the inner-plaza
+//  podium across X, group horizontal stretches of constant south-face
+//  Z into segments, and emit one staircase per segment that's wide
+//  enough to be worth building. This handles the multi-level south
+//  edge (e.g. main-entrance corridor sticking south at z≈34 vs. the
+//  central-cluster spine at z≈19) without hand-placement.
+// -----------------------------------------------------------------
+const AUTO_STAIR_X_STEP     = 0.5;  // metres between south-face samples
+const AUTO_STAIR_Z_TOL      = 0.5;  // metres — segment break threshold
+const AUTO_STAIR_MIN_WIDTH  = 3.0;  // metres — skip narrower segments
+const AUTO_STAIR_RUN_DEPTH  = 2.0;  // metres — south projection of the stair
+
+function _collectInnerPlazaPolygons() {
+  const polys = [];
+  for (const room of ROOMS) {
+    if (room.floor !== 1 || room.open) continue;
+    const poly = _innerPlazaRoomPolygon(room);
+    if (poly && poly.length >= 3) polys.push(poly);
+  }
+  if (WAYPOINTS && WAYPOINT_EDGES) {
+    const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
+    for (const edge of WAYPOINT_EDGES) {
+      const [aId, bId, type = "primary"] = edge;
+      if (type === "return") continue;
+      const a = wpById.get(aId), b = wpById.get(bId);
+      if (!a || !b) continue;
+      const poly = _innerPlazaCorridorPolygon(a, b, INNER_PLAZA_CORRIDOR_W);
+      if (poly && poly.length >= 3) polys.push(poly);
+    }
+    for (const wp of WAYPOINTS) {
+      if (wp.floor !== 1) continue;
+      const poly = _innerPlazaNodePolygon(wp, INNER_PLAZA_NODE_R, INNER_PLAZA_NODE_SEG);
+      if (poly && poly.length >= 3) polys.push(poly);
+    }
+  }
+  return polys;
+}
+
+// Largest Z where the vertical line at x is inside `poly`, or null if
+// the line doesn't pass through the polygon's interior at all.
+function _polyMaxZAtX(poly, x) {
+  let maxZ = -Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const [ax, az] = poly[i];
+    const [bx, bz] = poly[(i + 1) % poly.length];
+    if (Math.abs(bx - ax) < 1e-9) continue;            // skip vertical edges
+    if ((ax > x && bx > x) || (ax < x && bx < x)) continue;
+    const t = (x - ax) / (bx - ax);
+    if (t < 0 || t > 1) continue;
+    const z = az + t * (bz - az);
+    if (z > maxZ) maxZ = z;
+  }
+  return maxZ > -Infinity ? maxZ : null;
+}
+
+function _innerPlazaSouthFaceZ(x, polys) {
+  let southZ = -Infinity;
+  for (const poly of polys) {
+    const z = _polyMaxZAtX(poly, x);
+    if (z != null && z > southZ) southZ = z;
+  }
+  return southZ > -Infinity ? southZ : null;
+}
+
+function addAutoStaircases(group) {
+  const polys = _collectInnerPlazaPolygons();  // world (post-offset) coords
+  if (polys.length === 0) return;
+
+  // Sample south-face Z across the plaza X range. SITE_PLAZA is in
+  // raw plan coords, polygons are in world coords — convert at the
+  // query boundary so segments are reported in raw plan coords
+  // (the form buildStaircase wants).
+  const samples = [];
+  for (let x = SITE_PLAZA.minX; x <= SITE_PLAZA.maxX + 1e-6; x += AUTO_STAIR_X_STEP) {
+    const worldZ = _innerPlazaSouthFaceZ(offsetX(x), polys);
+    if (worldZ != null) samples.push({ x, z: worldZ + planCenter.z });
+  }
+
+  // Group consecutive samples whose Z is within tolerance into segments.
+  const segments = [];
+  let curr = null;
+  for (const s of samples) {
+    if (!curr || Math.abs(s.z - curr.z) > AUTO_STAIR_Z_TOL) {
+      if (curr) segments.push(curr);
+      curr = { xStart: s.x, xEnd: s.x, z: s.z };
+    } else {
+      curr.xEnd = s.x;
+      // Take the southmost Z so the stair tops land flush with the
+      // furthest-south point of this segment.
+      if (s.z > curr.z) curr.z = s.z;
+    }
+  }
+  if (curr) segments.push(curr);
+
+  // Emit one stair per segment wide enough to bother building. Leave
+  // a small inset so the stair doesn't fight the plaza rim or curb.
+  const INSET = 0.4;
+  for (const seg of segments) {
+    const width = seg.xEnd - seg.xStart;
+    if (width < AUTO_STAIR_MIN_WIDTH) continue;
+    // Skip segments whose south face sits at or beyond the plaza's
+    // south rim — no room to project a stair south of it.
+    if (seg.z + AUTO_STAIR_RUN_DEPTH > SITE_PLAZA.maxZ - 0.2) continue;
+    group.add(buildStaircase(
+      seg.xStart + INSET,
+      seg.xEnd   - INSET,
+      seg.z,
+      seg.z + AUTO_STAIR_RUN_DEPTH,
+    ));
+  }
+}
+
 // Border kept between every grass patch and the outer edge of the
 // plaza, so grass never touches the plaza rim. Bump for a wider beige
 // frame.
@@ -1367,13 +1480,12 @@ function addOutdoorTerrain(group) {
   // from addGroundGrassPatches() at scene level instead.
   group.add(buildSitePlaza());
   group.add(buildInnerPlaza());
-  // Stairs bridging the outer plaza up to the raised inner plaza,
-  // south face — placed where the user marked on the screenshot.
-  // Left stair: between the religion pavilion's SW corner and the
-  // south-spine corridor (x≈14–18.5).
-  group.add(buildStaircase(14.0, 18.5, 33.0, 35.0));
-  // Right stair: south face of the central building cluster (x≈20.5–32).
-  group.add(buildStaircase(20.5, 32.0, 33.0, 35.0));
+  // Stairs bridging the outer plaza up to the raised inner plaza.
+  // Computed from the actual south face of the podium geometry —
+  // one stair per horizontal stretch of constant south-face Z, so
+  // the multi-level southern edge (main-entrance corridor at z≈34,
+  // central spine at z≈19, etc.) each gets its own bridge.
+  addAutoStaircases(group);
   addPlazaGrassPatches(group);
   addGrassPatchCurbs(group);
   // Grass plane lives at scene level (added in buildFloors), so it
