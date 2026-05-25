@@ -66,17 +66,25 @@ function applyFloorLayout() {
     group.userData.targetY = y;
     y += gap;
   }
-  // Roof + interior toggle: ground-floor rooms render their CLOSED
-  // variant (walls cap + roof) in All / First-Floor views, and swap
-  // to the OPEN variant (open-top walls + interior props) only when
-  // the user explicitly views the Ground Floor on its own.
-  const showOpen = activeFloor === 1;
+  // Ground-Floor view toggles two things on the floor-1 group:
+  //  · LIFT roofs of the standalone single-storey rooms upward so the
+  //    user can see straight into the room. Floor-1 rooms that have a
+  //    storey above don't have a roof, so they just stay open-top.
+  //  · SHOW the museum-style interior props (rugs, pedestals, …).
+  // In All / First-Floor views the roofs sit at their built position
+  // and the interior is hidden (covered by the roof or the upper
+  // storey above).
+  const GROUND_FLOOR_LIFT = 2.4;
+  const isGround = activeFloor === 1;
   const f1 = floorGroups.get(1);
   if (f1) {
     f1.traverse((obj) => {
-      const v = obj.userData?.groundVariant;
-      if (v === "closed") obj.visible = !showOpen;
-      else if (v === "open") obj.visible = showOpen;
+      const kind = obj.userData?.kind;
+      if (kind === "liftableRoof") {
+        obj.position.y = isGround ? GROUND_FLOOR_LIFT : 0;
+      } else if (kind === "groundInterior") {
+        obj.visible = isGround;
+      }
     });
   }
   reframeCamera();

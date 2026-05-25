@@ -1935,12 +1935,6 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   // adapts to whatever shape the room has.
   const isFloor1 = room.floor === 1;
   const hasFloor2Above = isFloor1 && floor1WithFloor2.has(room.id);
-  // Roofs come back on when the user toggles "All" or "First Floor".
-  // Only when the user explicitly views the Ground Floor do we drop
-  // the roof / wall cap and expose interiors. For floor-1 rooms we
-  // build BOTH variants and toggle them in main.js applyFloorLayout
-  // via userData.groundVariant.
-  const buildBothVariants = isFloor1;
   const isStandaloneRoofed = !hasFloor2Above;
 
   // --- Foundation plinth (slight step at the base) ---
@@ -1952,39 +1946,42 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   group.add(foundation);
 
   // --- Walls ---
+  // Floor-1 rooms always use open-top walls so there's never a flat
+  // cream plane covering the room interior. In All / First-Floor views
+  // the closure comes from the roof (standalone rooms) or the floor-2
+  // foundation (rooms with a storey above). In Ground-Floor view the
+  // roof is LIFTED so you can see straight into the room.
+  // Floor-2 rooms keep the standard closed extrusion.
   const wallsBaseY = SITUM_BLOCK_LIFT + LP_FOUNDATION_H;
   const wallHeight = LP_WALL_HEIGHT_T;
-
-  // Closed-top walls — used in All / Floor-2 views.
-  const closedWalls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
-  closedWalls.position.y = wallsBaseY + wallHeight;
-  closedWalls.castShadow = true;
-  closedWalls.receiveShadow = true;
-  if (buildBothVariants) closedWalls.userData.groundVariant = "closed";
-  group.add(closedWalls);
-
-  // Open-top walls — used only when the user toggles the Ground Floor.
-  // Built once and hidden; the floor switcher swaps visibility.
-  let openWalls = null;
-  if (buildBothVariants) {
-    openWalls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
-    openWalls.castShadow = true;
-    openWalls.receiveShadow = true;
-    openWalls.userData.groundVariant = "open";
-    openWalls.visible = false;
-    group.add(openWalls);
+  let walls;
+  if (isFloor1) {
+    walls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
+  } else {
+    walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
+    walls.position.y = wallsBaseY + wallHeight;
   }
+  walls.castShadow = true;
+  walls.receiveShadow = true;
+  group.add(walls);
 
   // --- Red hip roof on top (skipped for floor-1 rooms that have a
-  // floor-2 block stacked on them — the upper storey IS their roof) ---
+  // floor-2 block stacked on them — the upper storey IS their roof).
+  // For floor-1 standalone rooms the whole roof + ridges + finial is
+  // wrapped in roofGroup tagged kind:"liftableRoof" so main.js can
+  // translate it upward when the user toggles Ground Floor. ---
   let roof = null;
   if (isStandaloneRoofed) {
+    const liftableParent = isFloor1 ? new THREE.Group() : group;
+    if (isFloor1) {
+      liftableParent.userData.kind = "liftableRoof";
+      group.add(liftableParent);
+    }
     // No outward offset — overhang at acute U-shape corners would spike.
     roof = buildLowPolyRoof(polygonLocal, wallsBaseY + wallHeight, LP_ROOF_RISE);
     if (roof) {
       roof.castShadow = true;
-      if (buildBothVariants) roof.userData.groundVariant = "closed";
-      group.add(roof);
+      liftableParent.add(roof);
       // Dark trim line along the eave + hip ridges.
       const ridges = new THREE.LineSegments(
         new THREE.EdgesGeometry(roof.geometry, 12),
@@ -1993,36 +1990,28 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
         }),
       );
       ridges.position.copy(roof.position);
-      if (buildBothVariants) ridges.userData.groundVariant = "closed";
-      group.add(ridges);
+      liftableParent.add(ridges);
 
       // --- Decorative finial at the roof apex ---
-      // Compute the polygon centroid in local plan-centred coords —
-      // that's where buildLowPolyRoof puts the hip apex.
       let fcx = 0, fcz = 0;
       for (const [x, z] of polygonLocal) { fcx += x; fcz += z; }
       fcx /= polygonLocal.length;
       fcz /= polygonLocal.length;
       const finialBaseY = wallsBaseY + wallHeight + LP_ROOF_RISE;
-      const finialGroup = new THREE.Group();
-      // Tapered base spike
       const spike = new THREE.Mesh(
         new THREE.ConeGeometry(0.08, 0.32, 8),
         lpOrnamentDark,
       );
       spike.position.set(fcx, finialBaseY + 0.16, fcz);
       spike.castShadow = true;
-      finialGroup.add(spike);
-      // Brass orb on top
+      liftableParent.add(spike);
       const orb = new THREE.Mesh(
         new THREE.SphereGeometry(0.07, 10, 8),
         lpOrnamentGold,
       );
       orb.position.set(fcx, finialBaseY + 0.40, fcz);
       orb.castShadow = true;
-      finialGroup.add(orb);
-      if (buildBothVariants) finialGroup.userData.groundVariant = "closed";
-      group.add(finialGroup);
+      liftableParent.add(orb);
     }
   }
 
@@ -2042,24 +2031,29 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
                     sharedEdges, doorsForRoom);
 
-  // --- Museum-style interiors — wrapped in a group that's only
-  //     visible when the open-top variant is active. ---
-  if (buildBothVariants) {
+  // --- Museum-style interiors — wrapped in a group that's only visible
+  //     when the user toggles Ground Floor. main.js toggles it via
+  //     userData.kind = "groundInterior". ---
+  if (isFloor1) {
     const interiorGroup = new THREE.Group();
-    interiorGroup.userData.groundVariant = "open";
+    interiorGroup.userData.kind = "groundInterior";
     interiorGroup.visible = false;
     addAbaJifarRoomInteriors(interiorGroup, room, polygonLocal, sharedEdges,
                              wallsBaseY, wallHeight);
     group.add(interiorGroup);
   }
 
-  // --- Silhouette outline on the walls ---
+  // --- Silhouette outline on the walls. Use a closed-extrusion
+  //     geometry as the EdgesGeometry source so we get one clean
+  //     line per perpendicular wall corner (open-top extrusion's
+  //     non-indexed triangles produce excessive edges). The source
+  //     mesh is never added to the scene. ---
+  const silhouetteSource = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
   const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(closedWalls.geometry, 1),
+    new THREE.EdgesGeometry(silhouetteSource.geometry, 1),
     new THREE.LineBasicMaterial({ color: LP_TRIM_COLOR, transparent: true, opacity: 0.55 }),
   );
-  edges.position.copy(closedWalls.position);
-  if (buildBothVariants) edges.userData.groundVariant = "closed";
+  edges.position.y = wallsBaseY + wallHeight;
   group.add(edges);
 
   group.userData = {
@@ -2068,8 +2062,8 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
     room,
     baseColor: baseColor.clone(),
     originalEmissive: new THREE.Color(0, 0, 0),
-    tile: closedWalls,
-    highlightTargets: roof ? [closedWalls, roof] : [closedWalls],
+    tile: walls,
+    highlightTargets: roof ? [walls, roof] : [walls],
   };
   return group;
 }
