@@ -2222,18 +2222,40 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
   const roomW = pmaxX - pminX;
   const roomD = pmaxZ - pminZ;
 
-  // 1. Rust-red rug under the centerpiece — gives the floor visual
-  //    centre and reads through the open top.
-  const rugW = Math.min(2.2, roomW * 0.55);
-  const rugD = Math.min(1.6, roomD * 0.55);
-  const rug = new THREE.Mesh(
-    new THREE.PlaneGeometry(rugW, rugD),
-    interiorRugMat,
-  );
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(cx, wallsBaseY + 0.01, cz);
-  rug.receiveShadow = true;
-  group.add(rug);
+  // Bail out entirely if the centroid isn't even inside the polygon —
+  // happens on heavily concave / U-shape rooms where the bbox centre
+  // sits in the hollow. The interior pass on those rooms would just
+  // place props outside the walls.
+  if (!_pointInPoly2D(cx, cz, polygonLocal)) return;
+
+  // 1. Rust-red rug under the centerpiece. Shrink the rug until all
+  //    four corners sit inside the polygon, so it can't poke through
+  //    a wall on irregular footprints. Cap by both bbox and absolute
+  //    metres so a tiny entrance room doesn't get a wall-to-wall rug.
+  const rugMaxW = Math.min(1.4, roomW * 0.45);
+  const rugMaxD = Math.min(1.0, roomD * 0.45);
+  let rugW = rugMaxW, rugD = rugMaxD;
+  const rugFits = () => {
+    const hx = rugW / 2, hz = rugD / 2;
+    return _pointInPoly2D(cx - hx, cz - hz, polygonLocal) &&
+           _pointInPoly2D(cx + hx, cz - hz, polygonLocal) &&
+           _pointInPoly2D(cx - hx, cz + hz, polygonLocal) &&
+           _pointInPoly2D(cx + hx, cz + hz, polygonLocal);
+  };
+  while (!rugFits() && rugW > 0.5 && rugD > 0.4) {
+    rugW *= 0.85;
+    rugD *= 0.85;
+  }
+  if (rugFits()) {
+    const rug = new THREE.Mesh(
+      new THREE.PlaneGeometry(rugW, rugD),
+      interiorRugMat,
+    );
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(cx, wallsBaseY + 0.01, cz);
+    rug.receiveShadow = true;
+    group.add(rug);
+  }
 
   // 2. Small stone pedestal at the centroid, with the category-themed
   //    ornament on top.
