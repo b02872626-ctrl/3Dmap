@@ -950,18 +950,25 @@ const PLAZA_GRASS_PATCHES = [
    [8.0, PLAZA_GRASS_N_MAX], [PLAZA_GRASS_W_MIN, PLAZA_GRASS_N_MAX]],
 ];
 
+// Height of the grass patch above the plaza top. Matches the curb
+// height by default so each lawn fills its curb like a planter bed.
+const GRASS_PATCH_HEIGHT = 0.06;
+
 function addPlazaGrassPatches(group) {
   const grassMat = new THREE.MeshStandardMaterial({
     color: TERRAIN_GRASS, roughness: 1.0, metalness: 0, flatShading: true,
   });
-  const topY = PLATFORM_Y + PLATFORM_H + 0.005;  // just above plaza top
+  // Extrusion thickness equals the raise above plaza, so the patch
+  // bottom is flush at plaza top and the patch top sits flush with
+  // the curb's top.
+  const topY = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT;
   for (const polygon of PLAZA_GRASS_PATCHES) {
     if (!Array.isArray(polygon) || polygon.length < 3) continue;
     const polyLocal = polygon.map(([x, z]) => [
       x - planCenter.x,
       z - planCenter.z,
     ]);
-    const patch = buildExtrudedPolygon(polyLocal, 0.02, grassMat);
+    const patch = buildExtrudedPolygon(polyLocal, GRASS_PATCH_HEIGHT, grassMat);
     patch.position.y = topY;
     patch.receiveShadow = true;
     group.add(patch);
@@ -1103,7 +1110,7 @@ function addGrassBlades(group) {
   const scaleVec = new THREE.Vector3();
   const up       = new THREE.Vector3(0, 1, 0);
   const color    = new THREE.Color();
-  const bladeY   = PLATFORM_Y + PLATFORM_H + 0.012;  // sit on top of the grass-patch tile
+  const bladeY   = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT + 0.005;  // sit on raised patch top
 
   for (let i = 0; i < samples.length; i++) {
     const [px, pz] = samples[i];
