@@ -125,11 +125,23 @@ export function buildGraph() {
         kind:  "door",
         door,
       });
+      // An INTERNAL door (one that's attached to more than one room) is
+      // the seam between two adjacent rooms — using it as a transit
+      // hub is "going through a room". Apply the through-building
+      // penalty to its door↔room edges so the pathfinder will only
+      // ever cross it when one of the rooms is the start/end of the
+      // route. External doors (one room) stay at base cost so people
+      // can still enter / exit normally.
+      const isInternalDoor = door.rooms.length > 1;
       for (const roomId of door.rooms) {
         const roomN = nodes.get(roomId);
         if (!roomN) continue;
         const doorN = nodes.get(door.id);
-        addEdge(roomId, door.id, dist2D(roomN, doorN));
+        const baseCost = dist2D(roomN, doorN);
+        addEdge(
+          roomId, door.id,
+          isInternalDoor ? baseCost * THROUGH_BUILDING_COST_FACTOR : baseCost,
+        );
       }
     }
     // Intra-room door↔door edges only (same room = inside same building).
