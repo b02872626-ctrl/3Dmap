@@ -114,8 +114,14 @@ export function buildFloors() {
     // addLandscapeDecor() to reduce density.
     if (LANDSCAPE_DECOR) addLandscapeDecor(root);
     // Reference-sheet trees — five types in instanced clusters around
-    // the plaza perimeter. See addReferenceTrees() below.
-    addReferenceTrees(root);
+    // the plaza perimeter. Wrapped in try/catch so a tree-builder
+    // failure (e.g. BufferGeometryUtils API drift) can't take down
+    // the whole render loop.
+    try {
+      addReferenceTrees(root);
+    } catch (err) {
+      console.error("addReferenceTrees failed:", err);
+    }
 
     // Subtle low-poly grass color patches for ground variation.
     if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);

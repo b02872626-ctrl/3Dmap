@@ -36,6 +36,10 @@ export function createScene(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.35;
+  // Force a cream clear-color even if scene.background fails to apply
+  // — keeps the canvas from showing the dark body gradient through a
+  // transparent buffer.
+  renderer.setClearColor(0xf4ede0, 1);
 
   // ---------------- Scene ----------------
   // Soft cream backdrop — matches the "studio render" look of the
@@ -165,11 +169,19 @@ export function createScene(canvas) {
   });
 
   // ---------------- Render loop ----------------
+  let _renderErrorLogged = false;
   function start(onFrame) {
     renderer.setAnimationLoop(() => {
-      controls.update();
-      if (onFrame) onFrame();
-      renderer.render(scene, camera);
+      try {
+        controls.update();
+        if (onFrame) onFrame();
+        renderer.render(scene, camera);
+      } catch (err) {
+        if (!_renderErrorLogged) {
+          console.error("Render loop error (first occurrence):", err);
+          _renderErrorLogged = true;
+        }
+      }
     });
   }
 
