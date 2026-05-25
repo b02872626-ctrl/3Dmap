@@ -1934,8 +1934,13 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   group.add(foundation);
 
   // --- Walls (closed cream extrusion) ---
+  // Floor-1 rooms whose footprint sits under a floor-2 block use a
+  // short stub wall — the upper storey is the visible structure for
+  // that volume, so a tall floor-1 wall just produces "geometry
+  // inside the room" when seen from above. Stand-alone roofed rooms
+  // (e.g. the religion pavilion, women's room) keep the full height.
   const wallsBaseY = SITUM_BLOCK_LIFT + LP_FOUNDATION_H;
-  const wallHeight = LP_WALL_HEIGHT_T;
+  const wallHeight = hasFloor2Above ? LP_WALL_HEIGHT_S : LP_WALL_HEIGHT_T;
   const walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
   walls.position.y = wallsBaseY + wallHeight;
   walls.castShadow = true;
@@ -1966,20 +1971,32 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   }
 
   // --- Windows on external walls + dark door panels at door positions ---
-  buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges, doorsForRoom);
-  if (room.floor === 1 && doorsForRoom.length) {
-    buildLowPolyDoors(group, polygonLocal, wallsBaseY, doorsForRoom);
+  // Skip on stub-walled floor-1 rooms: their walls are too short to
+  // host a sensible window/door, and the upper-storey block carries
+  // the visible openings instead.
+  if (!hasFloor2Above) {
+    buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, sharedEdges, doorsForRoom);
+    if (room.floor === 1 && doorsForRoom.length) {
+      buildLowPolyDoors(group, polygonLocal, wallsBaseY, doorsForRoom);
+    }
   }
 
   // --- Facade details: veranda, columns, railings, roof trim ---
+  // Columns are sized off the FACADE_COLUMN_HEIGHT constant, not the
+  // local wallHeight, so they keep their full reach even when the
+  // walls are short — they're still useful for visible ground-floor
+  // support under the upper storey.
   addBuildingFacadeDetails(group, {
     room, polygonLocal, wallsBaseY, wallHeight,
     sharedEdges, doorsForRoom, isRoofed: isStandaloneRoofed,
   });
 
-  // --- Balconies (wrap-around verandas) — floor 1 open, floor 2 fenced ---
-  addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
-                    sharedEdges, doorsForRoom);
+  // --- Balconies (wrap-around verandas) — skipped for stub-walled
+  //     floor-1 rooms; the floor-2 block has its own balcony pass. ---
+  if (!hasFloor2Above) {
+    addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
+                      sharedEdges, doorsForRoom);
+  }
 
   // --- Silhouette outline on the walls ---
   const edges = new THREE.LineSegments(
