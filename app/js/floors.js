@@ -864,7 +864,8 @@ function _makePaverTexture() {
   const ctx = c.getContext("2d");
 
   // Grout / cement bed colour — fills the gaps between slabs.
-  ctx.fillStyle = "#a8a6a2";
+  // Lightened so the visible "floor" of the rooms reads brighter.
+  ctx.fillStyle = "#c4c2be";
   ctx.fillRect(0, 0, size, size);
 
   const GRID    = 6;
@@ -910,10 +911,10 @@ function _makePaverTexture() {
       const pw = w * cellPx - grout;
       const ph = h * cellPx - grout;
 
-      // Base slab shade — very tight window around a single medium-
-      // light grey. Neighbouring slabs read as the same stone with
-      // only the grout lines and rims giving structure.
-      const v = 181 + Math.floor(Math.random() * 8);    // 181..188
+      // Base slab shade — very tight window around a single light
+      // grey. Neighbouring slabs read as the same stone with only
+      // the grout lines and rims giving structure.
+      const v = 208 + Math.floor(Math.random() * 8);    // 208..215
       ctx.fillStyle = `rgb(${v}, ${v}, ${Math.min(255, v + 2)})`;
       ctx.fillRect(px, py, pw, ph);
 
@@ -1017,7 +1018,7 @@ OUTER_PLAZA_PAVER_TEX.repeat.set(
   (SITE_PLAZA.maxZ - SITE_PLAZA.minZ) / PAVER_SCALE,
 );
 const terrainPlazaMat = new THREE.MeshStandardMaterial({
-  color: 0xc4c2bf, map: OUTER_PLAZA_PAVER_TEX,
+  color: 0xe6e3df, map: OUTER_PLAZA_PAVER_TEX,
   roughness: 0.92, metalness: 0, flatShading: true,
 });
 
@@ -1061,7 +1062,7 @@ const INNER_PLAZA_PAVER_TEX = PAVER_TEX.clone();
 INNER_PLAZA_PAVER_TEX.needsUpdate = true;
 INNER_PLAZA_PAVER_TEX.repeat.set(1 / PAVER_SCALE, 1 / PAVER_SCALE);
 const innerPlazaMat = new THREE.MeshStandardMaterial({
-  color: 0xc6c4c1, map: INNER_PLAZA_PAVER_TEX,
+  color: 0xe8e5e1, map: INNER_PLAZA_PAVER_TEX,
   roughness: 0.90, metalness: 0, flatShading: true,
 });
 
