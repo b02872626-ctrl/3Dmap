@@ -1146,6 +1146,50 @@ function buildInnerPlaza() {
   return mesh;
 }
 
+// -----------------------------------------------------------------
+//  Plaza staircases — bridge the outer plaza up to the raised inner
+//  plaza podium. Each stair is a stack of equal-rise boxes; the
+//  bottom step sits on the outer plaza top, the top step is flush
+//  with the inner plaza top. Stairs run south→north: the southmost
+//  step is the lowest, the northmost the highest.
+// -----------------------------------------------------------------
+const STAIR_STEPS  = 5;
+const STAIR_BOTTOM_Y = PLATFORM_Y + PLATFORM_H;                        // 0.07
+const STAIR_TOP_Y    = PLATFORM_Y + PLATFORM_H + INNER_PLAZA_LIFT;     // 0.97
+
+const stairMat = new THREE.MeshStandardMaterial({
+  color: 0xa6a4a1, roughness: 0.88, metalness: 0, flatShading: true,
+});
+
+// minX..maxX is the stair width (east-west).
+// topZ is the north (upper) edge, bottomZ the south (lower) edge.
+function buildStaircase(minX, maxX, topZ, bottomZ, steps = STAIR_STEPS) {
+  const grp = new THREE.Group();
+  const w = maxX - minX;
+  const cx = offsetX((minX + maxX) / 2);
+  const totalRun  = bottomZ - topZ;
+  const tread     = totalRun / steps;
+  const totalRise = STAIR_TOP_Y - STAIR_BOTTOM_Y;
+  const rise      = totalRise / steps;
+  for (let i = 0; i < steps; i++) {
+    // Step i=0 is southmost & lowest.
+    const stepTopY = STAIR_BOTTOM_Y + (i + 1) * rise;
+    const stepH    = stepTopY - STAIR_BOTTOM_Y;
+    const zFront   = bottomZ - i * tread;
+    const zBack    = bottomZ - (i + 1) * tread;
+    const zCenter  = (zFront + zBack) / 2;
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(w, stepH, tread),
+      stairMat,
+    );
+    box.position.set(cx, STAIR_BOTTOM_Y + stepH / 2, offsetZ(zCenter));
+    box.castShadow = true;
+    box.receiveShadow = true;
+    grp.add(box);
+  }
+  return grp;
+}
+
 // Border kept between every grass patch and the outer edge of the
 // plaza, so grass never touches the plaza rim. Bump for a wider beige
 // frame.
@@ -1378,6 +1422,13 @@ function addOutdoorTerrain(group) {
   // instanced grass blades + details on top.
   group.add(buildSitePlaza());
   group.add(buildInnerPlaza());
+  // Stairs bridging the outer plaza up to the raised inner plaza,
+  // south face — placed where the user marked on the screenshot.
+  // Left stair: between the religion pavilion's SW corner and the
+  // south-spine corridor (x≈14–18.5).
+  group.add(buildStaircase(14.0, 18.5, 33.0, 35.0));
+  // Right stair: south face of the central building cluster (x≈20.5–32).
+  group.add(buildStaircase(20.5, 32.0, 33.0, 35.0));
   addPlazaGrassPatches(group);
   addGrassPatchCurbs(group);
   addGrassBlades(group);
