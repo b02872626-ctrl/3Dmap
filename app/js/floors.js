@@ -907,39 +907,28 @@ function _makePaverTexture() {
       const pw = w * cellPx - grout;
       const ph = h * cellPx - grout;
 
-      // Base slab shade — tight window around a single medium-light
-      // grey, so neighbouring slabs read as the same stone with only
-      // subtle weathering between them.
-      const v = 175 + Math.floor(Math.random() * 18);   // 175..193
-      ctx.fillStyle = `rgb(${v}, ${v}, ${Math.min(255, v + 3)})`;
+      // Base slab shade — very tight window around a single medium-
+      // light grey. Neighbouring slabs read as the same stone with
+      // only the grout lines and rims giving structure.
+      const v = 181 + Math.floor(Math.random() * 8);    // 181..188
+      ctx.fillStyle = `rgb(${v}, ${v}, ${Math.min(255, v + 2)})`;
       ctx.fillRect(px, py, pw, ph);
 
-      // One faint cloud blot per slab — much lower alpha than before
-      // so each slab keeps a near-uniform value.
+      // Very faint cloud blot per slab — nearly imperceptible value
+      // shift, just enough to break up flat fills.
       const cx = px + Math.random() * pw;
       const cy = py + Math.random() * ph;
       const radius = Math.max(pw, ph) * (0.35 + Math.random() * 0.30);
       const dark = Math.random() < 0.5;
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      grad.addColorStop(0, dark ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.04)");
+      grad.addColorStop(0, dark ? "rgba(0,0,0,0.02)" : "rgba(255,255,255,0.02)");
       grad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = grad;
       ctx.fillRect(px, py, pw, ph);
 
-      // Light grain noise — softer than before for less per-pixel jitter.
-      const noiseCount = Math.floor(pw * ph * 0.03);
-      for (let i = 0; i < noiseCount; i++) {
-        const nx = px + Math.random() * pw;
-        const ny = py + Math.random() * ph;
-        ctx.fillStyle = Math.random() < 0.5
-          ? "rgba(0,0,0,0.04)"
-          : "rgba(255,255,255,0.03)";
-        ctx.fillRect(nx, ny, 1.2, 1.2);
-      }
-
       // Subtle darker inner rim so each slab still reads as a discrete
-      // unit even though its base shade is close to its neighbour's.
-      ctx.strokeStyle = "rgba(0,0,0,0.06)";
+      // unit even though its base shade matches its neighbour's.
+      ctx.strokeStyle = "rgba(0,0,0,0.05)";
       ctx.lineWidth = 1;
       ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
     }
