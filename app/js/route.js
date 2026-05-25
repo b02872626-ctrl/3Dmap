@@ -10,20 +10,19 @@
 // =============================================================
 import * as THREE from "three";
 
-const PATH_COLOR     = 0xff4d6a;   // brand magenta
-const PATH_ACCENT    = 0xfff4b3;   // arrow yellow
-const START_COLOR    = 0x4ade80;   // green
-const END_COLOR      = 0xff4d6a;   // magenta
-// Route renders just above the outdoor path strips. The inner plaza
-// was raised in floors.js (top at y ≈ 0.97) and path strips now sit
-// at y ≈ 1.02 + half their thickness ≈ 1.07. The constants below put
-// every route piece a few cm above that so the painted route reads
-// on top of the plaza paving instead of being buried under it.
-const ROUTE_Y_TUBE   = 1.18;
-const ROUTE_Y_ARROW  = 1.24;
-const ROUTE_Y_DISC   = 1.16;
-const ROUTE_Y_MARKER = 1.14;
-const ROUTE_Y_STEP   = 1.30;
+const PATH_COLOR     = 0xff2d56;   // bold magenta — high contrast vs cream paver
+const PATH_ACCENT    = 0xffffff;   // white arrows — pop against the magenta tube + cream paver
+const START_COLOR    = 0x22cc55;   // strong green
+const END_COLOR      = 0xff2d56;   // matches tube
+// Route renders WELL above the lifted plaza so the painted line is
+// clearly readable from any iso angle. Plaza top sits at y ≈ 0.97
+// and path strips at y ≈ 1.07; lifting the route to ~2.4 m gives it
+// daylight from every surface.
+const ROUTE_Y_TUBE   = 2.45;
+const ROUTE_Y_ARROW  = 2.55;
+const ROUTE_Y_DISC   = 2.40;
+const ROUTE_Y_MARKER = 2.40;
+const ROUTE_Y_STEP   = 2.85;
 
 export function createRouteLayer(scene, floorGroups) {
   const root = new THREE.Group();
@@ -111,27 +110,29 @@ export function createRouteLayer(scene, floorGroups) {
     const curve = new THREE.CatmullRomCurve3(points, false, "catmullrom", 0.35);
     const segments = Math.max(points.length * 16, 48);
 
-    // Glow halo (wider, very transparent)
-    const haloGeo = new THREE.TubeGeometry(curve, segments, 0.32, 12, false);
+    // Glow halo (wider, semi-transparent) — gives the tube an obvious
+    // pink aura so it reads as a navigation guide from far away.
+    const haloGeo = new THREE.TubeGeometry(curve, segments, 0.42, 12, false);
     const haloMat = new THREE.MeshBasicMaterial({
       color: PATH_COLOR,
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.28,
       depthWrite: false,
     });
     const halo = new THREE.Mesh(haloGeo, haloMat);
     halo.userData.isRoute = true;
     fg.add(halo);
 
-    // Inner tube with animated dash texture
+    // Inner tube with animated dash texture — thicker than before for
+    // visibility from iso views, fully opaque magenta core.
     const dashTex = makeDashTexture();
     dashTex.repeat.set(Math.max(curve.getLength() / 1.4, 4), 1);
-    const tubeGeo = new THREE.TubeGeometry(curve, segments, 0.11, 14, false);
+    const tubeGeo = new THREE.TubeGeometry(curve, segments, 0.17, 14, false);
     const tubeMat = new THREE.MeshBasicMaterial({
       map: dashTex,
       color: PATH_COLOR,
       transparent: true,
-      opacity: 0.95,
+      opacity: 1.0,
       depthWrite: false,
     });
     const tube = new THREE.Mesh(tubeGeo, tubeMat);
