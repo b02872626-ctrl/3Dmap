@@ -81,6 +81,15 @@ function buildAdjacency() {
 // =============================================================
 //  Public: build full museum
 // =============================================================
+// Flip to true to strip the scene down to only the building blocks
+// themselves (walls / roofs / doors / windows / columns / balconies /
+// foundations / finials). Everything else — plaza paving, stairs,
+// trees, lamps, gate, benches, planters, hedges, shrubs, signage,
+// roof corner brackets, path strips, waypoint markers, door pins —
+// is skipped. The lawn backdrop stays so the buildings aren't
+// floating in a void.
+const BUILDINGS_ONLY = true;
+
 export function buildFloors() {
   const root = new THREE.Group();
   root.name = "museum";
@@ -108,31 +117,25 @@ export function buildFloors() {
     grassBG.userData.kind = "grass-bg";
     root.add(grassBG);
 
-    // Sparse landscape decoration (trees) at hand-picked positions in
-    // open grass outside the building cluster. Edit LANDSCAPE_DECOR =
-    // false (top of file) to turn off, or trim the positions array in
-    // addLandscapeDecor() to reduce density.
-    if (LANDSCAPE_DECOR) addLandscapeDecor(root);
-    // Reference-sheet trees — five types in instanced clusters around
-    // the plaza perimeter. Wrapped in try/catch so a tree-builder
-    // failure (e.g. BufferGeometryUtils API drift) can't take down
-    // the whole render loop.
-    try {
-      addReferenceTrees(root);
-    } catch (err) {
-      console.error("addReferenceTrees failed:", err);
+    if (!BUILDINGS_ONLY) {
+      // Sparse landscape decoration (trees) at hand-picked positions in
+      // open grass outside the building cluster.
+      if (LANDSCAPE_DECOR) addLandscapeDecor(root);
+      // Reference-sheet trees — five types in instanced clusters around
+      // the plaza perimeter.
+      try {
+        addReferenceTrees(root);
+      } catch (err) {
+        console.error("addReferenceTrees failed:", err);
+      }
+
+      // Subtle low-poly grass color patches for ground variation.
+      if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
+
+      // Lamp posts, entrance gate, benches, hedges, flowering shrubs
+      // and signage posts.
+      addExteriorDetails(root);
     }
-
-    // Subtle low-poly grass color patches for ground variation.
-    if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
-
-    // Outer-lawn meandering pavement disabled — re-enable with
-    // addOuterLawnPavement(root) once a target location is confirmed.
-
-    // Lamp posts, entrance gate, benches, flagpoles, hedges, flowering
-    // shrubs and signage posts — see addExteriorDetails for the
-    // breakdown. Wrapped in its own try/catch internally per builder.
-    addExteriorDetails(root);
   }
 
   for (const floor of FLOORS) {
@@ -337,15 +340,13 @@ function loadSvgAsCanvasTexture(url, texture) {
 function buildSitumFloor(group, floor, roomGroups) {
   // Per-building paved platforms — floor 1 only. The grass BG is
   // attached at scene level so it's visible under any floor selection.
-  if (floor.id === 1) {
+  if (floor.id === 1 && !BUILDINGS_ONLY) {
     addOutdoorTerrain(group);
   }
 
   // Roads — only on the ground floor. Each road carries a `points`
-  // polygon traced from the SVG's hatched paving outline. We extrude
-  // that as a thin slab so the road's outline matches the painted
-  // paving, not just its bbox.
-  if (floor.id === 1 && ROADS && ROADS.length) {
+  // polygon traced from the SVG's hatched paving outline.
+  if (floor.id === 1 && !BUILDINGS_ONLY && ROADS && ROADS.length) {
     for (const road of ROADS) {
       const slab = buildRoadSlab(road);
       if (slab) group.add(slab);
@@ -381,7 +382,7 @@ function buildSitumFloor(group, floor, roomGroups) {
 
   // Outdoor walking network — ground floor only. Primary spine,
   // secondary connectors, and dashed recommended-return loop.
-  if (floor.id === 1 && WAYPOINTS && WAYPOINTS.length) {
+  if (floor.id === 1 && !BUILDINGS_ONLY && WAYPOINTS && WAYPOINTS.length) {
     const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
     // Beige ground corridors UNDER each path edge — extends the paved
     // ground along the walking routes so paths never appear to float
@@ -410,7 +411,7 @@ function buildSitumFloor(group, floor, roomGroups) {
   }
 
   // Door markers — floor 1 only.
-  if (floor.id === 1 && DOORS && DOORS.length) {
+  if (floor.id === 1 && !BUILDINGS_ONLY && DOORS && DOORS.length) {
     for (const door of DOORS) {
       if (door.floor !== 1) continue;
       group.add(buildDoorMarker(door));
@@ -422,7 +423,7 @@ function buildSitumFloor(group, floor, roomGroups) {
   addFacadeFromZones(group, floor);
 
   // GroundSurfaceDetails — path curbs + stair zones (ground floor only).
-  if (SHOW_GROUND_DETAILS && floor.id === 1) {
+  if (SHOW_GROUND_DETAILS && !BUILDINGS_ONLY && floor.id === 1) {
     if (SHOW_CURBS)         addPathCurbsForFloor(group);
     if (SHOW_STAIR_DETAILS) addStairZonesForFloor(group, floor.id);
   }
