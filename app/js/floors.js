@@ -1379,25 +1379,47 @@ const TREE_BASE_Y      = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT;
 // don't push into the curb. Each entry: { type, x, z, s, r }.
 const TREE_POSITIONS = [
   // ----- Patch 1: NW open area (L-shape, bbox 8-21 × 2-12.5) -----
-  { type: "C", x: 11, z:  4.5, s: 1.00, r: 0.4 },
-  { type: "B", x: 16, z:  4.5, s: 0.95, r: 1.6 },
-  { type: "D", x: 10, z:  8.0, s: 0.95, r: 0.9 },
-  { type: "D", x: 14, z: 11.0, s: 0.90, r: 2.1 },
+  { type: "C", x: 10.5, z:  4.0, s: 1.00, r: 0.4 },
+  { type: "B", x: 14.0, z:  3.5, s: 0.95, r: 1.6 },
+  { type: "D", x: 17.5, z:  4.0, s: 0.95, r: 2.4 },
+  { type: "D", x: 19.5, z:  6.0, s: 0.90, r: 0.8 },
+  { type: "B", x: 10.0, z:  7.5, s: 0.95, r: 1.1 },
+  { type: "C", x: 14.5, z:  7.0, s: 1.00, r: 2.0 },
+  { type: "D", x: 19.0, z:  8.5, s: 0.95, r: 0.5 },
+  { type: "D", x: 10.5, z: 11.0, s: 0.95, r: 1.8 },
+  { type: "B", x: 14.0, z: 11.0, s: 0.95, r: 0.3 },
+  { type: "D", x: 16.5, z: 11.5, s: 0.90, r: 2.7 },
 
   // ----- Patch 2: East strip (34-46.5 × 11.5-31) -----
-  { type: "A", x: 38, z: 14,   s: 1.00, r: 0.3 },
-  { type: "B", x: 43, z: 15,   s: 0.95, r: 1.5 },
-  { type: "C", x: 37, z: 20,   s: 1.00, r: 2.0 },
-  { type: "D", x: 43, z: 21,   s: 0.95, r: 0.7 },
-  { type: "B", x: 38, z: 26,   s: 1.00, r: 1.9 },
-  { type: "C", x: 44, z: 28,   s: 1.00, r: 2.4 },
+  { type: "A", x: 37.0, z: 13.5, s: 1.00, r: 0.3 },
+  { type: "B", x: 41.5, z: 13.0, s: 0.95, r: 1.5 },
+  { type: "C", x: 45.0, z: 14.5, s: 1.00, r: 2.0 },
+  { type: "D", x: 36.0, z: 17.0, s: 0.95, r: 1.1 },
+  { type: "C", x: 40.5, z: 17.5, s: 1.00, r: 2.3 },
+  { type: "B", x: 44.5, z: 18.5, s: 0.95, r: 0.6 },
+  { type: "D", x: 37.5, z: 21.0, s: 0.95, r: 1.7 },
+  { type: "B", x: 42.0, z: 22.0, s: 0.95, r: 0.4 },
+  { type: "A", x: 45.5, z: 23.0, s: 1.00, r: 2.5 },
+  { type: "C", x: 37.0, z: 25.5, s: 1.00, r: 1.0 },
+  { type: "D", x: 41.0, z: 26.5, s: 0.95, r: 1.9 },
+  { type: "B", x: 44.5, z: 27.5, s: 0.95, r: 0.7 },
+  { type: "C", x: 38.0, z: 29.0, s: 1.00, r: 2.4 },
+  { type: "D", x: 43.0, z: 29.5, s: 0.95, r: 1.3 },
+
+  // ----- Patch 3: South strip (18-46.5 × 34.5-36.5) -----
+  // Strip is only ~2 m wide; use the slim columnar (E) type so
+  // foliage doesn't overflow the curb.
+  { type: "E", x: 21.0, z: 35.5, s: 0.95, r: 0 },
+  { type: "E", x: 27.0, z: 35.5, s: 0.95, r: 0 },
+  { type: "E", x: 33.0, z: 35.5, s: 0.95, r: 0 },
+  { type: "E", x: 39.0, z: 35.5, s: 0.95, r: 0 },
+  { type: "E", x: 45.0, z: 35.5, s: 0.95, r: 0 },
 
   // ----- Patch 4: SW patch (4.5-8 × 28-36.5) -----
-  { type: "D", x:  6, z: 30.5, s: 0.95, r: 0.6 },
-  { type: "E", x:  6, z: 34.5, s: 0.95, r: 0   },
+  { type: "D", x: 6.0, z: 29.5, s: 0.95, r: 0.6 },
+  { type: "B", x: 6.5, z: 32.5, s: 0.95, r: 1.8 },
+  { type: "E", x: 6.0, z: 35.0, s: 0.95, r: 0   },
 ];
-// Patch 3 (south strip, 18-46.5 × 34.5-36.5) is only ~2 m wide —
-// trees would overflow the curb. Intentionally left empty.
 
 // CylinderGeometry / ConeGeometry are indexed; IcosahedronGeometry is
 // non-indexed. BufferGeometryUtils.mergeGeometries refuses to mix
