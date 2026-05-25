@@ -423,7 +423,7 @@ function buildSitumFloor(group, floor, roomGroups) {
 const PATH_COLOR        = 0xc8b893;   // primary spine — warm flagstone
 const PATH_COLOR_LIGHT  = 0xd9cba8;   // secondary connector — paler stone
 const PATH_THICK        = 0.10;
-const PATH_LIFT         = 0.25;
+const PATH_LIFT         = 0.42;
 const PATH_OUTLINE      = 0x6e6249;   // mortar / shadow line between tiles
 const WAYPOINT_COLOR    = 0xffd400;
 const MAJOR_STOP_COLOR  = 0xff6b3d;   // orange — stands out against stone
@@ -676,7 +676,7 @@ function buildLamppost(cx, cz_y, cz) {
 }
 
 const SITUM_BLOCK_HEIGHT = 1.6;   // height of each room's 3D block (fallback path only)
-const SITUM_BLOCK_LIFT   = 0.20;  // sit on top of the inner plaza (outer plaza 0.07 + INNER_PLAZA_LIFT 0.13)
+const SITUM_BLOCK_LIFT   = 0.37;  // sit on top of the inner plaza (outer plaza 0.07 + INNER_PLAZA_LIFT 0.30)
 const SITUM_TILE_HEIGHT  = 0.12;  // colored floor tile thickness
 const SITUM_WALL_HEIGHT  = 1.85;  // beige perimeter walls
 const SITUM_WALL_THICK   = 0.22;
@@ -932,7 +932,7 @@ function buildSitePlaza() {
 // polygons (so the lawns appear as sunken openings inside the
 // raised area). Buildings + paths sit on this inner plaza top —
 // SITUM_BLOCK_LIFT and PATH_LIFT have been bumped to match.
-const INNER_PLAZA_LIFT = 0.13;
+const INNER_PLAZA_LIFT = 0.30;
 const innerPlazaMat = new THREE.MeshStandardMaterial({
   color: 0xe1cda7, roughness: 0.92, metalness: 0, flatShading: true,
 });
