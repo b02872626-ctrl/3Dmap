@@ -1098,6 +1098,12 @@ const PLAZA_GRASS_PATCHES = [
   // 4. SW patch — between palace platform and plaza SW corner
   [[PLAZA_GRASS_W_MIN, 28.0], [8.0, 28.0],
    [8.0, PLAZA_GRASS_N_MAX], [PLAZA_GRASS_W_MIN, PLAZA_GRASS_N_MAX]],
+
+  // 5. Node-1 pocket — small hole framed by the main-entrance corridor
+  //    (south), the religion vertical corridor (west), the spine
+  //    vertical corridor (east), and the religion-pavilion podium
+  //    contribution (north). Sits inside that natural U-shaped gap.
+  [[14.0, 29.2], [18.0, 29.2], [18.0, 31.8], [14.0, 31.8]],
 ];
 
 // Height of the grass patch above the plaza top. Matches the curb
