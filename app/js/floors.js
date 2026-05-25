@@ -928,45 +928,47 @@ function buildSitePlaza() {
 }
 
 // Raised "inner plaza" that frames the building section like a
-// podium. Footprint = SITE_PLAZA rectangle minus the grass-patch
-// polygons (so the lawns appear as sunken openings inside the
-// raised area). Buildings + paths sit on this inner plaza top —
-// SITUM_BLOCK_LIFT and PATH_LIFT have been bumped to match.
+// podium. Footprint = a single hand-traced polygon enclosing the
+// building cluster + the south spine corridor to node 1, with NO
+// holes (the grass patches live entirely OUTSIDE this polygon at
+// the outer-plaza level). Buildings + paths sit on the podium top.
 const INNER_PLAZA_LIFT = 0.13;
 const innerPlazaMat = new THREE.MeshStandardMaterial({
   color: 0xe1cda7, roughness: 0.92, metalness: 0, flatShading: true,
 });
 
+// Hand-traced from the user's dark-blue outline. Raw plan coords,
+// clockwise from the NW corner. Wraps the central cluster + Women's
+// Role + palace block + religion pavilion + south spine, threading
+// between every grass patch.
+const BUILDING_PODIUM_POLYGON = [
+  [22.0,  2.0],  // NW corner (east of NW grass patch)
+  [44.0,  2.0],  // NE corner (north of Women's Role)
+  [44.0, 11.0],  // SE corner of Women's wrap
+  [33.5, 11.0],  // step west to skirt the east strip grass
+  [33.5, 32.0],  // long east side, south past Gibe Kingdom
+  [18.0, 32.0],  // SW corner of building zone east
+  [18.0, 34.5],  // dip south for the south spine corridor
+  [11.5, 34.5],  // west edge of node 1 approach
+  [11.5, 27.0],  // climb back north (east of SW grass)
+  [ 9.0, 27.0],  // step west to wrap palace's west side
+  [ 9.0, 13.0],  // up the palace west edge
+  [22.0, 13.0],  // east along the south of NW grass back to start
+];
+
 function buildInnerPlaza() {
   const shape = new THREE.Shape();
-  const minX = offsetX(SITE_PLAZA.minX);
-  const maxX = offsetX(SITE_PLAZA.maxX);
-  const minZ = offsetZ(SITE_PLAZA.minZ);
-  const maxZ = offsetZ(SITE_PLAZA.maxZ);
-  shape.moveTo(minX, minZ);
-  shape.lineTo(maxX, minZ);
-  shape.lineTo(maxX, maxZ);
-  shape.lineTo(minX, maxZ);
-  shape.lineTo(minX, minZ);
-  // Punch the grass patches out so the lawn pokes through at its
-  // (lower) level.
-  for (const patch of PLAZA_GRASS_PATCHES) {
-    if (!Array.isArray(patch) || patch.length < 3) continue;
-    const hole = new THREE.Path();
-    for (let i = 0; i < patch.length; i++) {
-      const [x, z] = patch[i];
-      const lx = offsetX(x);
-      const lz = offsetZ(z);
-      if (i === 0) hole.moveTo(lx, lz); else hole.lineTo(lx, lz);
-    }
-    shape.holes.push(hole);
+  for (let i = 0; i < BUILDING_PODIUM_POLYGON.length; i++) {
+    const [x, z] = BUILDING_PODIUM_POLYGON[i];
+    const lx = offsetX(x);
+    const lz = offsetZ(z);
+    if (i === 0) shape.moveTo(lx, lz); else shape.lineTo(lx, lz);
   }
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: INNER_PLAZA_LIFT, bevelEnabled: false,
   });
   geo.rotateX(Math.PI / 2);
   const mesh = new THREE.Mesh(geo, innerPlazaMat);
-  // Bottom flush at outer-plaza top, top at outer-plaza top + lift.
   mesh.position.y = PLATFORM_Y + PLATFORM_H + INNER_PLAZA_LIFT;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
