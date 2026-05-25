@@ -968,6 +968,56 @@ function addPlazaGrassPatches(group) {
   }
 }
 
+// ---------------- Curb around each grass patch ----------------
+// A thin stone ring that frames every grass patch — built as the
+// difference between the patch polygon offset outward by
+// GRASS_CURB_WIDTH and the patch polygon itself (Shape + hole).
+const GRASS_CURB_WIDTH  = 0.14;    // metres outward from the patch edge
+const GRASS_CURB_HEIGHT = 0.06;    // metres raised above the plaza top
+const grassCurbMat = new THREE.MeshStandardMaterial({
+  color: 0x9d8e72, roughness: 0.92, metalness: 0, flatShading: true,
+});
+
+function _buildGrassPatchCurb(patchPolygonRaw) {
+  const polyLocal = patchPolygonRaw.map(([x, z]) => [
+    x - planCenter.x,
+    z - planCenter.z,
+  ]);
+  const outerPoly = offsetPolygonOutward(polyLocal, GRASS_CURB_WIDTH);
+
+  const shape = new THREE.Shape();
+  for (let i = 0; i < outerPoly.length; i++) {
+    const [x, z] = outerPoly[i];
+    if (i === 0) shape.moveTo(x, z); else shape.lineTo(x, z);
+  }
+  const hole = new THREE.Path();
+  for (let i = 0; i < polyLocal.length; i++) {
+    const [x, z] = polyLocal[i];
+    if (i === 0) hole.moveTo(x, z); else hole.lineTo(x, z);
+  }
+  shape.holes.push(hole);
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: GRASS_CURB_HEIGHT, bevelEnabled: false,
+  });
+  geo.rotateX(Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, grassCurbMat);
+  // After rotateX(PI/2), geometry spans world Y 0 → -depth. Lift so
+  // top sits at plaza-top + GRASS_CURB_HEIGHT and bottom at plaza top.
+  mesh.position.y = PLATFORM_Y + PLATFORM_H + GRASS_CURB_HEIGHT;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function addGrassPatchCurbs(group) {
+  for (const polygon of PLAZA_GRASS_PATCHES) {
+    if (!Array.isArray(polygon) || polygon.length < 3) continue;
+    const curb = _buildGrassPatchCurb(polygon);
+    if (curb) group.add(curb);
+  }
+}
+
 // ====================================================================
 //  Grass blades — instanced low-poly tufts scattered on every plaza
 //  grass patch. One InstancedMesh per layer = a single draw call for
@@ -1082,9 +1132,10 @@ function addGrassBlades(group) {
 function addOutdoorTerrain(group) {
   // Start with the big site plaza (one rectangle covering the entire
   // compound), then layer per-building platforms + grass cut-outs +
-  // instanced grass blades + details on top.
+  // curbs + instanced grass blades + details on top.
   group.add(buildSitePlaza());
   addPlazaGrassPatches(group);
+  addGrassPatchCurbs(group);
   addGrassBlades(group);
   // Grass plane lives at scene level (added in buildFloors), so it
   // shows under every floor regardless of which one is filtered. Here
