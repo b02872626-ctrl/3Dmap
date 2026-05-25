@@ -849,57 +849,102 @@ function _makeWallPlasterTexture() {
   return tex;
 }
 
-// Cobblestone texture for the plaza paving — jittered grid of irregular
-// grey stones with darker mortar between them. One 512×512 canvas tiles
-// across world space via RepeatWrapping; the outer + inner plaza both
-// reuse this source.
-function _makeCobblestoneTexture() {
+// Grey paver texture for the plaza — irregular grid of square /
+// rectangular slabs (1×1, 1×2, 2×1, 2×2 unit sizes) with light
+// grout lines between, subtle cloud-style tonal variation per slab
+// and a fine grain noise. Greedy fill of a 6×6 cell grid keeps the
+// tiling tessellated.
+function _makePaverTexture() {
   const c = document.createElement("canvas");
-  c.width  = 512;
-  c.height = 512;
+  const size = 512;
+  c.width = c.height = size;
   const ctx = c.getContext("2d");
-  // Dark mortar base
-  ctx.fillStyle = "#3a3a3c";
-  ctx.fillRect(0, 0, 512, 512);
-  // Jittered grid of cobbles. cellSize chosen so a stone is roughly
-  // 1/3 m at COBBLE_SCALE=4 m per repeat.
-  const cellSize = 46;
-  const cols = Math.ceil(512 / cellSize) + 1;
-  const rows = Math.ceil(512 / cellSize) + 1;
-  for (let cy = -1; cy < rows; cy++) {
-    for (let cx = -1; cx < cols; cx++) {
-      const jx = (Math.random() - 0.5) * cellSize * 0.45;
-      const jy = (Math.random() - 0.5) * cellSize * 0.45;
-      const x = cx * cellSize + cellSize / 2 + jx;
-      const y = cy * cellSize + cellSize / 2 + jy;
-      const r = cellSize * (0.42 + Math.random() * 0.10);
-      // Stone shade: medium-light grey with small variance per stone
-      const base = 132 + Math.floor(Math.random() * 58);
-      const rr = Math.max(0, Math.min(255, base + (Math.random() - 0.5) * 16));
-      const gg = Math.max(0, Math.min(255, base + (Math.random() - 0.5) * 16));
-      const bb = Math.max(0, Math.min(255, base + (Math.random() - 0.5) * 18));
-      const ang = Math.random() * Math.PI;
-      ctx.fillStyle = `rgb(${rr|0}, ${gg|0}, ${bb|0})`;
-      ctx.beginPath();
-      ctx.ellipse(x, y,
-        r * (0.92 + Math.random() * 0.12),
-        r * (0.82 + Math.random() * 0.16),
-        ang, 0, Math.PI * 2);
-      ctx.fill();
-      // Subtle top-left highlight on each stone
-      ctx.fillStyle = "rgba(255,255,255,0.07)";
-      ctx.beginPath();
-      ctx.ellipse(x - r * 0.28, y - r * 0.28,
-        r * 0.38, r * 0.22, ang, 0, Math.PI * 2);
-      ctx.fill();
-      // Faint bottom-right shadow
-      ctx.fillStyle = "rgba(0,0,0,0.10)";
-      ctx.beginPath();
-      ctx.ellipse(x + r * 0.30, y + r * 0.30,
-        r * 0.32, r * 0.18, ang, 0, Math.PI * 2);
-      ctx.fill();
+
+  // Grout / cement bed colour — fills the gaps between slabs.
+  ctx.fillStyle = "#a8a6a2";
+  ctx.fillRect(0, 0, size, size);
+
+  const GRID    = 6;
+  const cellPx  = size / GRID;
+  const grout   = 4;          // grout-line width in pixels
+
+  const grid = [];
+  for (let r = 0; r < GRID; r++) grid.push(new Array(GRID).fill(false));
+
+  const fits = (col, row, w, h) => {
+    if (col + w > GRID || row + h > GRID) return false;
+    for (let dy = 0; dy < h; dy++)
+      for (let dx = 0; dx < w; dx++)
+        if (grid[row + dy][col + dx]) return false;
+    return true;
+  };
+  const mark = (col, row, w, h) => {
+    for (let dy = 0; dy < h; dy++)
+      for (let dx = 0; dx < w; dx++)
+        grid[row + dy][col + dx] = true;
+  };
+
+  // Weighted size pool: 1×1 most common, 2×2 least.
+  const sizePool = [
+    [2,2],
+    [2,1],[2,1],
+    [1,2],[1,2],
+    [1,1],[1,1],[1,1],[1,1],
+  ];
+  const pickSize = (col, row) => {
+    const cands = sizePool.filter(([w,h]) => fits(col, row, w, h));
+    return cands.length ? cands[Math.floor(Math.random() * cands.length)] : [1,1];
+  };
+
+  for (let row = 0; row < GRID; row++) {
+    for (let col = 0; col < GRID; col++) {
+      if (grid[row][col]) continue;
+      const [w, h] = pickSize(col, row);
+      mark(col, row, w, h);
+
+      const px = col * cellPx + grout / 2;
+      const py = row * cellPx + grout / 2;
+      const pw = w * cellPx - grout;
+      const ph = h * cellPx - grout;
+
+      // Base slab shade — medium-light grey with a faint cool tint.
+      const v = 150 + Math.floor(Math.random() * 65);   // 150..215
+      ctx.fillStyle = `rgb(${v}, ${v}, ${Math.min(255, v + 4)})`;
+      ctx.fillRect(px, py, pw, ph);
+
+      // 1–2 soft cloud highlights / shadows per slab.
+      const blobs = 1 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < blobs; i++) {
+        const cx = px + Math.random() * pw;
+        const cy = py + Math.random() * ph;
+        const radius = Math.max(pw, ph) * (0.30 + Math.random() * 0.35);
+        const dark = Math.random() < 0.5;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.09)");
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(px, py, pw, ph);
+      }
+
+      // Fine grain noise.
+      const noiseCount = Math.floor(pw * ph * 0.05);
+      for (let i = 0; i < noiseCount; i++) {
+        const nx = px + Math.random() * pw;
+        const ny = py + Math.random() * ph;
+        ctx.fillStyle = Math.random() < 0.5
+          ? "rgba(0,0,0,0.07)"
+          : "rgba(255,255,255,0.05)";
+        ctx.fillRect(nx, ny, 1.2, 1.2);
+      }
+
+      // Subtle darker inner rim so each slab reads as a discrete unit
+      // even when its base shade matches a neighbour.
+      ctx.strokeStyle = "rgba(0,0,0,0.07)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
     }
   }
+
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -908,9 +953,10 @@ function _makeCobblestoneTexture() {
 
 const ROOF_TILE_TEX     = _makeRoofTileTexture();
 const WALL_PLASTER_TEX  = _makeWallPlasterTexture();
-const COBBLE_TEX        = _makeCobblestoneTexture();
-// Metres of world space per one full texture repeat.
-const COBBLE_SCALE      = 4.0;
+const PAVER_TEX         = _makePaverTexture();
+// Metres of world space per one full texture repeat. 3 m fits roughly
+// six 50 cm slabs per repeat, which reads as a credible paved court.
+const PAVER_SCALE       = 3.0;
 
 // World-space repeat lengths — texture tiles every N metres regardless
 // of the geometry's UV layout.
@@ -969,18 +1015,18 @@ const SITE_PLAZA = {
 // the lowered grass level so its sides are visible as a raised step.
 const SITE_PLAZA_THICK = 1.60;
 
-// Outer plaza uses a cloned cobblestone texture so its repeat can be
-// set independently of the inner plaza. BoxGeometry's top face has UVs
+// Outer plaza uses a cloned paver texture so its repeat can be set
+// independently of the inner plaza. BoxGeometry's top face has UVs
 // in 0..1, so we scale repeat by the plaza's world dimensions.
-const OUTER_PLAZA_COBBLE_TEX = COBBLE_TEX.clone();
-OUTER_PLAZA_COBBLE_TEX.needsUpdate = true;
-OUTER_PLAZA_COBBLE_TEX.repeat.set(
-  (SITE_PLAZA.maxX - SITE_PLAZA.minX) / COBBLE_SCALE,
-  (SITE_PLAZA.maxZ - SITE_PLAZA.minZ) / COBBLE_SCALE,
+const OUTER_PLAZA_PAVER_TEX = PAVER_TEX.clone();
+OUTER_PLAZA_PAVER_TEX.needsUpdate = true;
+OUTER_PLAZA_PAVER_TEX.repeat.set(
+  (SITE_PLAZA.maxX - SITE_PLAZA.minX) / PAVER_SCALE,
+  (SITE_PLAZA.maxZ - SITE_PLAZA.minZ) / PAVER_SCALE,
 );
 const terrainPlazaMat = new THREE.MeshStandardMaterial({
-  color: 0xb8b6b3, map: OUTER_PLAZA_COBBLE_TEX,
-  roughness: 0.95, metalness: 0, flatShading: true,
+  color: 0xc4c2bf, map: OUTER_PLAZA_PAVER_TEX,
+  roughness: 0.92, metalness: 0, flatShading: true,
 });
 
 function buildSitePlaza() {
@@ -1017,14 +1063,14 @@ const INNER_PLAZA_NODE_R    = 1.2;   // metres radius for waypoint discs
 const INNER_PLAZA_NODE_SEG  = 16;    // disc tessellation
 
 // Inner plaza uses ExtrudeGeometry, whose top-face UVs equal the
-// polygon's local 2D coords in metres. Scale repeat by 1/COBBLE_SCALE
-// so the texture tiles every COBBLE_SCALE metres of world space.
-const INNER_PLAZA_COBBLE_TEX = COBBLE_TEX.clone();
-INNER_PLAZA_COBBLE_TEX.needsUpdate = true;
-INNER_PLAZA_COBBLE_TEX.repeat.set(1 / COBBLE_SCALE, 1 / COBBLE_SCALE);
+// polygon's local 2D coords in metres. Scale repeat by 1/PAVER_SCALE
+// so the texture tiles every PAVER_SCALE metres of world space.
+const INNER_PLAZA_PAVER_TEX = PAVER_TEX.clone();
+INNER_PLAZA_PAVER_TEX.needsUpdate = true;
+INNER_PLAZA_PAVER_TEX.repeat.set(1 / PAVER_SCALE, 1 / PAVER_SCALE);
 const innerPlazaMat = new THREE.MeshStandardMaterial({
-  color: 0xbab8b5, map: INNER_PLAZA_COBBLE_TEX,
-  roughness: 0.92, metalness: 0, flatShading: true,
+  color: 0xc6c4c1, map: INNER_PLAZA_PAVER_TEX,
+  roughness: 0.90, metalness: 0, flatShading: true,
 });
 
 // Build an extruded polygon piece in non-indexed form so all pieces
