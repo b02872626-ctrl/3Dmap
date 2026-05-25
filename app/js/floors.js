@@ -1304,122 +1304,17 @@ function addGrassPatchCurbs(group) {
   }
 }
 
-// ====================================================================
-//  Grass blades — instanced low-poly tufts scattered on every plaza
-//  grass patch. One InstancedMesh per layer = a single draw call for
-//  ~10–13k blades.
-// ====================================================================
-const SHOW_GRASS_BLADES    = false;
-const GRASS_DENSITY        = 25;       // blades per m²
-const GRASS_BLADE_BASE_W   = 0.10;     // metres at the bottom
-const GRASS_BLADE_TIP_W    = 0.025;    // tapered tip
-const GRASS_BLADE_H        = 0.28;     // metres tall (default scale × 1.0)
-const GRASS_SCALE_MIN      = 0.65;
-const GRASS_SCALE_MAX      = 1.30;
-const GRASS_COLOR_BASE     = new THREE.Color(0x4f6e36);
-const GRASS_LIGHTNESS_MIN  = 0.80;
-const GRASS_LIGHTNESS_MAX  = 1.25;
-
-function _buildGrassBladeGeometry() {
-  // 4 verts → 2 triangles, narrower at top → reads as a tufty blade.
-  const positions = new Float32Array([
-    -GRASS_BLADE_BASE_W / 2, 0,              0,
-     GRASS_BLADE_BASE_W / 2, 0,              0,
-     GRASS_BLADE_TIP_W  / 2, GRASS_BLADE_H,  0,
-    -GRASS_BLADE_TIP_W  / 2, GRASS_BLADE_H,  0,
-  ]);
-  const indices = new Uint16Array([0, 1, 2,  0, 2, 3]);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(new THREE.BufferAttribute(indices, 1));
-  geo.computeVertexNormals();
-  return geo;
-}
-
-function _pointInPolygon2D(px, pz, poly) {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i][0], zi = poly[i][1];
-    const xj = poly[j][0], zj = poly[j][1];
-    if (((zi > pz) !== (zj > pz)) &&
-        (px < (xj - xi) * (pz - zi) / (zj - zi + 1e-12) + xi)) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-function addGrassBlades(group) {
-  if (!SHOW_GRASS_BLADES) return;
-
-  // Sample blade positions inside every grass-patch polygon. Bbox
-  // sampling + point-in-polygon rejection handles the L-shape (NW)
-  // patch correctly; over-sampling by 1.4× compensates for rejected
-  // points.
-  const samples = [];
-  for (const patch of PLAZA_GRASS_PATCHES) {
-    if (!Array.isArray(patch) || patch.length < 3) continue;
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    for (const [x, z] of patch) {
-      if (x < minX) minX = x; if (x > maxX) maxX = x;
-      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
-    }
-    const area  = (maxX - minX) * (maxZ - minZ);
-    const tries = Math.ceil(area * GRASS_DENSITY * 1.4);
-    for (let i = 0; i < tries; i++) {
-      const px = minX + Math.random() * (maxX - minX);
-      const pz = minZ + Math.random() * (maxZ - minZ);
-      if (_pointInPolygon2D(px, pz, patch)) samples.push([px, pz]);
-    }
-  }
-  if (samples.length === 0) return;
-
-  const geo = _buildGrassBladeGeometry();
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,            // base white — every instance tinted via instanceColor
-    roughness: 0.95, metalness: 0,
-    flatShading: true,
-    side: THREE.DoubleSide,
-  });
-
-  const inst = new THREE.InstancedMesh(geo, mat, samples.length);
-  const matrix   = new THREE.Matrix4();
-  const position = new THREE.Vector3();
-  const quat     = new THREE.Quaternion();
-  const scaleVec = new THREE.Vector3();
-  const up       = new THREE.Vector3(0, 1, 0);
-  const color    = new THREE.Color();
-  const bladeY   = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT + 0.005;  // sit on raised patch top
-
-  for (let i = 0; i < samples.length; i++) {
-    const [px, pz] = samples[i];
-    position.set(px - planCenter.x, bladeY, pz - planCenter.z);
-    const rotY = Math.random() * Math.PI;       // full 180° (DoubleSide so 360° equiv)
-    const sc   = GRASS_SCALE_MIN + Math.random() * (GRASS_SCALE_MAX - GRASS_SCALE_MIN);
-    quat.setFromAxisAngle(up, rotY);
-    scaleVec.set(sc, sc, sc);
-    matrix.compose(position, quat, scaleVec);
-    inst.setMatrixAt(i, matrix);
-
-    const lightness = GRASS_LIGHTNESS_MIN +
-      Math.random() * (GRASS_LIGHTNESS_MAX - GRASS_LIGHTNESS_MIN);
-    color.copy(GRASS_COLOR_BASE).multiplyScalar(lightness);
-    inst.setColorAt(i, color);
-  }
-  inst.instanceMatrix.needsUpdate = true;
-  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
-  // Shadows off — thousands of tiny blades make casting expensive and
-  // receiving looks noisy at this scale.
-  inst.castShadow = false;
-  inst.receiveShadow = false;
-  group.add(inst);
-}
+// Grass blades removed by design — this map uses a clean low-poly style:
+// flat terrain surfaces, subtle green color patches (see
+// addGroundGrassPatches below), and sparse shrubs/trees. No per-blade
+// geometry.
 
 function addOutdoorTerrain(group) {
   // Start with the big site plaza (one rectangle covering the entire
   // compound), then add the raised inner plaza around the buildings,
   // then layer per-building platforms + grass cut-outs + curbs +
-  // instanced grass blades + details on top.
+  // details on top. No grass-blade geometry — color variation comes
+  // from addGroundGrassPatches() at scene level instead.
   group.add(buildSitePlaza());
   group.add(buildInnerPlaza());
   // Stairs bridging the outer plaza up to the raised inner plaza,
@@ -1431,7 +1326,6 @@ function addOutdoorTerrain(group) {
   group.add(buildStaircase(20.5, 32.0, 33.0, 35.0));
   addPlazaGrassPatches(group);
   addGrassPatchCurbs(group);
-  addGrassBlades(group);
   // Grass plane lives at scene level (added in buildFloors), so it
   // shows under every floor regardless of which one is filtered. Here
   // we only add the per-building paved platforms — floor-1 only.
@@ -2736,7 +2630,7 @@ const SHOW_GROUND_DETAILS   = true;
 const SHOW_PAVING_LINES     = true;
 const SHOW_CURBS            = true;
 const SHOW_STAIR_DETAILS    = true;
-const SHOW_GRASS_VARIATION  = false;
+const SHOW_GRASS_VARIATION  = true;
 
 // Tile grid on platforms
 const GD_TILE_SIZE          = 1.60;   // metres — distance between grout lines
@@ -2951,26 +2845,45 @@ function addStairZonesForFloor(group, floorId) {
   }
 }
 
-// Subtle low-poly grass patches at scene level. Positions are in
-// LOCAL plan-centred coords; building bbox is roughly x:[-25,+5],
-// z:[-21,+3], so every patch below sits outside that envelope.
+// Subtle low-poly grass patches on the outer lawn. Each patch is an
+// 8-segment circle (octagon) at the lawn surface, tinted with one of
+// three slightly different greens so the lawn reads as soft natural
+// variation rather than a uniform flat colour. All positions sit
+// OUTSIDE SITE_PLAZA (world x:[-32.7..12.3] z:[-26.9..13.1]) so they
+// aren't hidden under the cobblestone block.
 function addGroundGrassPatches(root) {
+  // Sit 1 cm above the grassBG plane (Y=-1.55) to avoid z-fighting
+  // while staying flush at the lawn surface.
+  const patchY = -1.54;
   const PATCHES = [
-    // [x, z, radius, materialIndex]
-    [ 16, -14, 2.4, 0],
-    [ 19,  -6, 1.8, 1],
-    [ 14,   4, 2.2, 2],
-    [ 22,   8, 1.6, 0],
-    [  2,  20, 2.5, 1],
-    [-10,  19, 1.9, 2],
-    [-20,  12, 2.3, 0],
-    [-32,  -8, 2.0, 1],
-    [-30,   8, 2.2, 2],
-    [-25, -23, 1.7, 0],
-    [  8, -20, 2.4, 1],
-    [ -5, -28, 1.9, 2],
-    [ 11,  22, 2.1, 0],
-    [ 22, -10, 1.8, 2],
+    // [x, z, radius, materialIndex] — mix of big soft pools and
+    // smaller accents distributed around the plaza perimeter.
+
+    // East of plaza (x > 12.3)
+    [ 18,  -8, 5.5, 0],
+    [ 24,   6, 4.0, 1],
+    [ 32, -12, 3.0, 2],
+    [ 36,   4, 5.0, 1],
+    [ 44, -18, 3.5, 0],
+    [ 50,  10, 4.2, 2],
+
+    // South of plaza (z > 13.1)
+    [ -6,  20, 6.0, 1],
+    [  8,  26, 4.5, 0],
+    [ -20, 22, 3.5, 2],
+    [ 22,  18, 4.0, 1],
+    [ -30, 28, 3.0, 0],
+
+    // North of plaza (z < -26.9)
+    [-12, -34, 5.0, 2],
+    [ 14, -40, 4.0, 0],
+    [-28, -32, 3.2, 1],
+    [  4, -48, 3.8, 2],
+
+    // West of plaza (x < -32.7)
+    [-44, -10, 5.5, 1],
+    [-50,  12, 3.5, 0],
+    [-58,  -4, 4.0, 2],
   ];
   for (const [x, z, r, mIdx] of PATCHES) {
     const patch = new THREE.Mesh(
@@ -2978,7 +2891,7 @@ function addGroundGrassPatches(root) {
       gdGrassPatchMats[mIdx],
     );
     patch.rotation.x = -Math.PI / 2;
-    patch.position.set(x, 0.002, z);
+    patch.position.set(x, patchY, z);
     patch.receiveShadow = true;
     root.add(patch);
   }
