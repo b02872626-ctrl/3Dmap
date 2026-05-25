@@ -1923,7 +1923,11 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   // adapts to whatever shape the room has.
   const isFloor1 = room.floor === 1;
   const hasFloor2Above = isFloor1 && floor1WithFloor2.has(room.id);
-  const isStandaloneRoofed = !hasFloor2Above;
+  // Ground-floor (room.floor === 1) rooms render with no roof and no
+  // wall top cap so the room interior is visible from above — per the
+  // user's "remove the top part of all rooms on the [ground] floor".
+  const exposedTop = isFloor1;
+  const isStandaloneRoofed = !hasFloor2Above && !exposedTop;
 
   // --- Foundation plinth (slight step at the base) ---
   const foundationPoly = offsetPolygonOutward(polygonLocal, LP_FOUNDATION_OUT);
@@ -1933,17 +1937,26 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   foundation.receiveShadow = true;
   group.add(foundation);
 
-  // --- Walls (closed cream extrusion) ---
+  // --- Walls (closed cream extrusion, or open-top for ground-floor
+  // rooms so the interior is exposed when viewed from above) ---
   const wallsBaseY = SITUM_BLOCK_LIFT + LP_FOUNDATION_H;
   const wallHeight = LP_WALL_HEIGHT_T;
-  const walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
-  walls.position.y = wallsBaseY + wallHeight;
+  let walls;
+  if (exposedTop) {
+    // buildOpenTopExtrusion emits only the side faces (no top/bottom
+    // cap) and uses absolute Y in its vertices — no position.y needed.
+    walls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
+  } else {
+    walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
+    walls.position.y = wallsBaseY + wallHeight;
+  }
   walls.castShadow = true;
   walls.receiveShadow = true;
   group.add(walls);
 
   // --- Red hip roof on top (skipped for floor-1 rooms that have a
-  // floor-2 block stacked on them — the upper storey IS their roof) ---
+  // floor-2 block stacked on them — the upper storey IS their roof,
+  // and skipped for any room whose top is exposed) ---
   let roof = null;
   if (isStandaloneRoofed) {
     // No outward offset — overhang at acute U-shape corners would spike.
