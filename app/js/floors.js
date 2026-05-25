@@ -1922,13 +1922,8 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   // red hip roof. Footprint polygon is NEVER modified — the roof
   // adapts to whatever shape the room has.
   const isFloor1 = room.floor === 1;
-  const isFloor2 = room.floor === 2;
   const hasFloor2Above = isFloor1 && floor1WithFloor2.has(room.id);
-  // First-floor (upper) rooms render with no roof and no wall top cap
-  // so the room interior is visible from above — per the user's
-  // "remove the top part of all rooms on the first floor" request.
-  const exposedTop = isFloor2;
-  const isStandaloneRoofed = !hasFloor2Above && !exposedTop;
+  const isStandaloneRoofed = !hasFloor2Above;
 
   // --- Foundation plinth (slight step at the base) ---
   const foundationPoly = offsetPolygonOutward(polygonLocal, LP_FOUNDATION_OUT);
@@ -1938,26 +1933,17 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   foundation.receiveShadow = true;
   group.add(foundation);
 
-  // --- Walls (closed cream extrusion, or open-top for first-floor rooms
-  // so the interior is exposed when viewed from above) ---
+  // --- Walls (closed cream extrusion) ---
   const wallsBaseY = SITUM_BLOCK_LIFT + LP_FOUNDATION_H;
   const wallHeight = LP_WALL_HEIGHT_T;
-  let walls;
-  if (exposedTop) {
-    // buildOpenTopExtrusion emits only the side faces (no top/bottom
-    // cap) and uses absolute Y in its vertices — no position.y needed.
-    walls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
-  } else {
-    walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
-    walls.position.y = wallsBaseY + wallHeight;
-  }
+  const walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
+  walls.position.y = wallsBaseY + wallHeight;
   walls.castShadow = true;
   walls.receiveShadow = true;
   group.add(walls);
 
   // --- Red hip roof on top (skipped for floor-1 rooms that have a
-  // floor-2 block stacked on them — the upper storey IS their roof,
-  // and skipped for first-floor rooms whose tops are exposed) ---
+  // floor-2 block stacked on them — the upper storey IS their roof) ---
   let roof = null;
   if (isStandaloneRoofed) {
     // No outward offset — overhang at acute U-shape corners would spike.
