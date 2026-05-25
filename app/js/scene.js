@@ -22,25 +22,16 @@ export const FOV = 35;
 export const FOV_HALF_TAN = Math.tan((FOV * Math.PI / 180) / 2);
 
 export function createScene(canvas) {
-  // Mobile / coarse-pointer detection — used to drop shadow cost and
-  // cap the pixel ratio so phones stay interactive.
-  const isMobile = window.matchMedia(
-    "(pointer: coarse) and (hover: none), (max-width: 760px)",
-  ).matches;
-
   // ---------------- Renderer ----------------
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: !isMobile,
+    antialias: true,
     alpha: true,
-    powerPreference: isMobile ? "low-power" : "high-performance",
+    powerPreference: "high-performance",
   });
-  // Cap pixel ratio at 1 on phones — devicePixelRatio is often 2–3 on
-  // mobile, which doubles/triples fragment cost for marginal gain at
-  // typical viewing distances.
-  renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = !isMobile;
+  renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -90,12 +81,10 @@ export function createScene(canvas) {
     MIDDLE: THREE.MOUSE.DOLLY,
     RIGHT:  THREE.MOUSE.PAN,
   };
-  // Touch: Google-Maps style — ONE finger pans the camera, TWO fingers
-  // pinch-to-zoom + rotate around the orbit target. Rotation is still
-  // available, just not by accident with a single drag.
+  // Touch: one-finger rotates, two-finger pinch zoom + pan.
   controls.touches = {
-    ONE: THREE.TOUCH.PAN,
-    TWO: THREE.TOUCH.DOLLY_ROTATE,
+    ONE: THREE.TOUCH.ROTATE,
+    TWO: THREE.TOUCH.DOLLY_PAN,
   };
 
   // ---------------- Lighting ----------------
@@ -110,7 +99,7 @@ export function createScene(canvas) {
 
   const sun = new THREE.DirectionalLight(0xfff0d0, 1.10);
   sun.position.set(40, 80, -30);
-  sun.castShadow = !isMobile;
+  sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left   = -80;
   sun.shadow.camera.right  =  80;
