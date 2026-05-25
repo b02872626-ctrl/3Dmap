@@ -907,39 +907,39 @@ function _makePaverTexture() {
       const pw = w * cellPx - grout;
       const ph = h * cellPx - grout;
 
-      // Base slab shade — medium-light grey with a faint cool tint.
-      const v = 150 + Math.floor(Math.random() * 65);   // 150..215
-      ctx.fillStyle = `rgb(${v}, ${v}, ${Math.min(255, v + 4)})`;
+      // Base slab shade — tight window around a single medium-light
+      // grey, so neighbouring slabs read as the same stone with only
+      // subtle weathering between them.
+      const v = 175 + Math.floor(Math.random() * 18);   // 175..193
+      ctx.fillStyle = `rgb(${v}, ${v}, ${Math.min(255, v + 3)})`;
       ctx.fillRect(px, py, pw, ph);
 
-      // 1–2 soft cloud highlights / shadows per slab.
-      const blobs = 1 + Math.floor(Math.random() * 2);
-      for (let i = 0; i < blobs; i++) {
-        const cx = px + Math.random() * pw;
-        const cy = py + Math.random() * ph;
-        const radius = Math.max(pw, ph) * (0.30 + Math.random() * 0.35);
-        const dark = Math.random() < 0.5;
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-        grad.addColorStop(0, dark ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.09)");
-        grad.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(px, py, pw, ph);
-      }
+      // One faint cloud blot per slab — much lower alpha than before
+      // so each slab keeps a near-uniform value.
+      const cx = px + Math.random() * pw;
+      const cy = py + Math.random() * ph;
+      const radius = Math.max(pw, ph) * (0.35 + Math.random() * 0.30);
+      const dark = Math.random() < 0.5;
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      grad.addColorStop(0, dark ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.04)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(px, py, pw, ph);
 
-      // Fine grain noise.
-      const noiseCount = Math.floor(pw * ph * 0.05);
+      // Light grain noise — softer than before for less per-pixel jitter.
+      const noiseCount = Math.floor(pw * ph * 0.03);
       for (let i = 0; i < noiseCount; i++) {
         const nx = px + Math.random() * pw;
         const ny = py + Math.random() * ph;
         ctx.fillStyle = Math.random() < 0.5
-          ? "rgba(0,0,0,0.07)"
-          : "rgba(255,255,255,0.05)";
+          ? "rgba(0,0,0,0.04)"
+          : "rgba(255,255,255,0.03)";
         ctx.fillRect(nx, ny, 1.2, 1.2);
       }
 
-      // Subtle darker inner rim so each slab reads as a discrete unit
-      // even when its base shade matches a neighbour.
-      ctx.strokeStyle = "rgba(0,0,0,0.07)";
+      // Subtle darker inner rim so each slab still reads as a discrete
+      // unit even though its base shade is close to its neighbour's.
+      ctx.strokeStyle = "rgba(0,0,0,0.06)";
       ctx.lineWidth = 1;
       ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
     }
@@ -1273,6 +1273,21 @@ const PLAZA_GRASS_PATCHES = [
   //    vertical corridor (east), and the religion-pavilion podium
   //    contribution (north). Sits inside that natural U-shaped gap.
   [[14.0, 29.2], [18.0, 29.2], [18.0, 31.8], [14.0, 31.8]],
+
+  // 6. North strip — outer plaza north of the central cluster, between
+  //    the cluster's north corridor (z≈3–5) and the plaza's north rim.
+  [[22.0, PLAZA_GRASS_N_MIN], [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MIN],
+   [PLAZA_GRASS_W_MAX,  1.5], [22.0,  1.5]],
+
+  // 7. West strip — narrow outer-plaza band west of the palace block,
+  //    between the plaza rim and the palace's western inner-plaza edge.
+  [[PLAZA_GRASS_W_MIN,  3.0], [ 7.5,  3.0],
+   [ 7.5, 13.5], [PLAZA_GRASS_W_MIN, 13.5]],
+
+  // 8. NE corner pocket — between the NW patch's east edge, the east
+  //    strip's north edge, and the cluster's NE inner-plaza extension.
+  [[34.0,  6.5], [PLAZA_GRASS_W_MAX,  6.5],
+   [PLAZA_GRASS_W_MAX, 10.0], [34.0, 10.0]],
 ];
 
 // Height of the grass patch above the plaza top. Matches the curb
@@ -2676,7 +2691,7 @@ const SHOW_GROUND_DETAILS   = true;
 const SHOW_PAVING_LINES     = true;
 const SHOW_CURBS            = true;
 const SHOW_STAIR_DETAILS    = true;
-const SHOW_GRASS_VARIATION  = true;
+const SHOW_GRASS_VARIATION  = false;
 
 // Tile grid on platforms
 const GD_TILE_SIZE          = 1.60;   // metres — distance between grout lines
