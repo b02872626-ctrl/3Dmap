@@ -1369,7 +1369,7 @@ const TREE_TRUNK_COLOR = 0x5A3A23;
 // site-scale lawn; inside the small plaza grass patches they need
 // to be much smaller. Bump this toward 1.0 for big trees, toward
 // 0.2 for tiny ones.
-const TREE_GLOBAL_SCALE = 0.30;
+const TREE_GLOBAL_SCALE = 0.45;
 // Trees sit on the raised plaza grass patches, not the lower lawn.
 // Patch top Y = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT = 0.13.
 const TREE_BASE_Y      = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT;
