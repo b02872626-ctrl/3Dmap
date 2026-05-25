@@ -2206,14 +2206,10 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
   if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
   if (room.open) return;
 
-  // Polygon centroid (local plan-centred coords) — used to anchor the
-  // centerpiece and as the reference for "inward" wall normals.
-  let cx = 0, cz = 0;
-  for (const [x, z] of polygonLocal) { cx += x; cz += z; }
-  cx /= polygonLocal.length;
-  cz /= polygonLocal.length;
-
-  // Polygon bbox — for rug sizing and corner-prop placement.
+  // Polygon bbox first — its centre is our preferred "room centre"
+  // for placing the rug + centerpiece pedestal, since it reads as
+  // visually-centred even when the polygon is a tilted or slightly
+  // irregular rectangle (vertex-average centroid drifts off-axis).
   let pminX = Infinity, pmaxX = -Infinity, pminZ = Infinity, pmaxZ = -Infinity;
   for (const [x, z] of polygonLocal) {
     if (x < pminX) pminX = x; if (x > pmaxX) pmaxX = x;
@@ -2221,11 +2217,23 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
   }
   const roomW = pmaxX - pminX;
   const roomD = pmaxZ - pminZ;
+  const bboxCx = (pminX + pmaxX) / 2;
+  const bboxCz = (pminZ + pmaxZ) / 2;
 
-  // Bail out entirely if the centroid isn't even inside the polygon —
-  // happens on heavily concave / U-shape rooms where the bbox centre
-  // sits in the hollow. The interior pass on those rooms would just
-  // place props outside the walls.
+  // Vertex-average centroid — kept as a fallback when the bbox centre
+  // falls outside the polygon (U-shape rooms whose bbox centre lands
+  // in the hollow).
+  let centroidX = 0, centroidZ = 0;
+  for (const [x, z] of polygonLocal) { centroidX += x; centroidZ += z; }
+  centroidX /= polygonLocal.length;
+  centroidZ /= polygonLocal.length;
+
+  const useBbox = _pointInPoly2D(bboxCx, bboxCz, polygonLocal);
+  const cx = useBbox ? bboxCx : centroidX;
+  const cz = useBbox ? bboxCz : centroidZ;
+
+  // Bail out entirely if neither candidate centre sits inside the
+  // polygon — props would just float outside the walls.
   if (!_pointInPoly2D(cx, cz, polygonLocal)) return;
 
   // 1. Rust-red rug under the centerpiece. Shrink the rug until all
