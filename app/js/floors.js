@@ -1407,23 +1407,27 @@ const TREE_POSITIONS = [
   { type: "E", x: 20, z:  41, s: 1.00, r: 0 },
 ];
 
+// CylinderGeometry / ConeGeometry are indexed; IcosahedronGeometry is
+// non-indexed. BufferGeometryUtils.mergeGeometries refuses to mix
+// the two, so every primitive that goes into a merge is normalized
+// to non-indexed via toNonIndexed() first.
+function _ni(geo) { return geo.toNonIndexed(); }
+
 function _buildConiferGeo(totalH) {
-  // Trunk
-  const trunkH = totalH * 0.22;
-  const trunkR = totalH * 0.045;
+  const trunkH    = totalH * 0.22;
+  const trunkR    = totalH * 0.045;
   const trunkRTop = totalH * 0.038;
-  const trunk = new THREE.CylinderGeometry(trunkRTop, trunkR, trunkH, 6);
+  const trunk = _ni(new THREE.CylinderGeometry(trunkRTop, trunkR, trunkH, 6));
   trunk.translate(0, trunkH / 2, 0);
 
-  // 3 stacked cones forming the conifer silhouette
   const fH    = totalH - trunkH * 0.7;
   const base  = trunkH * 0.65;
   const c1H = fH * 0.42, c1R = totalH * 0.24;
   const c2H = fH * 0.34, c2R = totalH * 0.19;
   const c3H = fH * 0.32, c3R = totalH * 0.13;
-  const c1 = new THREE.ConeGeometry(c1R, c1H, 6); c1.translate(0, base + c1H / 2, 0);
-  const c2 = new THREE.ConeGeometry(c2R, c2H, 6); c2.translate(0, base + c1H * 0.7 + c2H / 2, 0);
-  const c3 = new THREE.ConeGeometry(c3R, c3H, 6); c3.translate(0, base + c1H * 0.7 + c2H * 0.7 + c3H / 2, 0);
+  const c1 = _ni(new THREE.ConeGeometry(c1R, c1H, 6)); c1.translate(0, base + c1H / 2, 0);
+  const c2 = _ni(new THREE.ConeGeometry(c2R, c2H, 6)); c2.translate(0, base + c1H * 0.7 + c2H / 2, 0);
+  const c3 = _ni(new THREE.ConeGeometry(c3R, c3H, 6)); c3.translate(0, base + c1H * 0.7 + c2H * 0.7 + c3H / 2, 0);
   const foliage = BufferGeometryUtils.mergeGeometries([c1, c2, c3]);
   return { trunkGeo: trunk, foliageGeo: foliage };
 }
@@ -1431,11 +1435,11 @@ function _buildConiferGeo(totalH) {
 function _buildBroadleafGeo(totalH) {
   const trunkH = totalH * 0.30;
   const trunkR = totalH * 0.035;
-  const trunk = new THREE.CylinderGeometry(trunkR * 0.85, trunkR, trunkH, 6);
+  const trunk = _ni(new THREE.CylinderGeometry(trunkR * 0.85, trunkR, trunkH, 6));
   trunk.translate(0, trunkH / 2, 0);
 
   const foliageR = totalH * 0.35;
-  const foliage = new THREE.IcosahedronGeometry(foliageR, 0);
+  const foliage = new THREE.IcosahedronGeometry(foliageR, 0);  // already non-indexed
   foliage.translate(0, trunkH + foliageR * 0.78, 0);
   return { trunkGeo: trunk, foliageGeo: foliage };
 }
@@ -1443,14 +1447,14 @@ function _buildBroadleafGeo(totalH) {
 function _buildColumnarGeo(totalH) {
   const trunkH = totalH * 0.18;
   const trunkR = totalH * 0.030;
-  const trunk = new THREE.CylinderGeometry(trunkR, trunkR, trunkH, 6);
+  const trunk = _ni(new THREE.CylinderGeometry(trunkR, trunkR, trunkH, 6));
   trunk.translate(0, trunkH / 2, 0);
 
   const folH = totalH * 0.70;
   const folR = totalH * 0.10;
-  const col = new THREE.CylinderGeometry(folR * 0.4, folR, folH, 8);
+  const col = _ni(new THREE.CylinderGeometry(folR * 0.4, folR, folH, 8));
   col.translate(0, trunkH * 0.4 + folH / 2, 0);
-  const cap = new THREE.IcosahedronGeometry(folR * 0.55, 0);
+  const cap = new THREE.IcosahedronGeometry(folR * 0.55, 0);   // already non-indexed
   cap.translate(0, trunkH * 0.4 + folH + folR * 0.2, 0);
   const foliage = BufferGeometryUtils.mergeGeometries([col, cap]);
   return { trunkGeo: trunk, foliageGeo: foliage };
