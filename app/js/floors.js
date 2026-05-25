@@ -125,6 +125,13 @@ export function buildFloors() {
 
     // Subtle low-poly grass color patches for ground variation.
     if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
+
+    // Outer-lawn meandering pavement on the east side.
+    try {
+      addOuterLawnPavement(root);
+    } catch (err) {
+      console.error("addOuterLawnPavement failed:", err);
+    }
   }
 
   for (const floor of FLOORS) {
@@ -3057,6 +3064,104 @@ function addGroundGrassPatches(root) {
     patch.receiveShadow = true;
     root.add(patch);
   }
+}
+
+// -----------------------------------------------------------------
+//  Outer lawn pavement — a meandering paved path through the east
+//  lawn. Smoothed through hand-picked control points (plan coords)
+//  with CatmullRomCurve3, ribbonised by offsetting perpendicular to
+//  the curve tangent, then extruded flat so it sits on the grass.
+// -----------------------------------------------------------------
+const OUTER_PAVE_WIDTH      = 1.8;          // metres
+const OUTER_PAVE_HEIGHT     = 0.06;         // raise above grass
+const OUTER_PAVE_BASE_Y     = -1.55;        // grassBG sits at Y=-1.55
+const OUTER_PAVE_COLOR      = 0xeae1ca;     // light limestone / cream
+
+const outerPaveMat = new THREE.MeshStandardMaterial({
+  color: OUTER_PAVE_COLOR, roughness: 0.94, metalness: 0, flatShading: true,
+});
+
+function buildOuterPavementPath(controlPoints, width = OUTER_PAVE_WIDTH) {
+  if (!Array.isArray(controlPoints) || controlPoints.length < 2) return null;
+
+  // Smooth interpolation through the control points. Catmull-Rom in
+  // XZ — Y stays flat.
+  const curve = new THREE.CatmullRomCurve3(
+    controlPoints.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+    false, "catmullrom", 0.5,
+  );
+  const N = controlPoints.length * 10;       // samples along the curve
+  const samples = curve.getPoints(N);
+
+  // Compute ribbon edges via perpendicular offset at each sample.
+  const half = width / 2;
+  const left = [];
+  const right = [];
+  for (let i = 0; i < samples.length; i++) {
+    const p = samples[i];
+    let tx, tz;
+    if (i === 0) {
+      const n = samples[1];
+      tx = n.x - p.x; tz = n.z - p.z;
+    } else if (i === samples.length - 1) {
+      const prev = samples[i - 1];
+      tx = p.x - prev.x; tz = p.z - prev.z;
+    } else {
+      const prev = samples[i - 1], next = samples[i + 1];
+      tx = next.x - prev.x; tz = next.z - prev.z;
+    }
+    const tlen = Math.hypot(tx, tz) || 1;
+    tx /= tlen; tz /= tlen;
+    // Perpendicular (XZ plane).
+    const nx = -tz, nz = tx;
+    left.push([p.x + nx * half, p.z + nz * half]);
+    right.push([p.x - nx * half, p.z - nz * half]);
+  }
+
+  // Stitch ribbon edges into one closed polygon (plan coords).
+  const polyPlan = [];
+  for (let i = 0; i < left.length; i++) polyPlan.push(left[i]);
+  for (let i = right.length - 1; i >= 0; i--) polyPlan.push(right[i]);
+
+  // Convert to world (post-offset) coords for the Shape.
+  const shape = new THREE.Shape();
+  const [sx, sz] = polyPlan[0];
+  shape.moveTo(offsetX(sx), offsetZ(sz));
+  for (let i = 1; i < polyPlan.length; i++) {
+    const [x, z] = polyPlan[i];
+    shape.lineTo(offsetX(x), offsetZ(z));
+  }
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: OUTER_PAVE_HEIGHT, bevelEnabled: false,
+  });
+  geo.rotateX(Math.PI / 2);
+  // After rotation, top face sits at Y=0, bottom at Y=-depth. Lift so
+  // bottom rests on the lawn (Y=OUTER_PAVE_BASE_Y) and top is just
+  // proud of the grass.
+  geo.translate(0, OUTER_PAVE_BASE_Y + OUTER_PAVE_HEIGHT, 0);
+
+  const mesh = new THREE.Mesh(geo, outerPaveMat);
+  mesh.receiveShadow = true;
+  mesh.castShadow = false;
+  return mesh;
+}
+
+// Hand-picked control points (raw plan coords) for the wavy east-lawn
+// pavement the user drew on the screenshot. Smoothed via Catmull-Rom.
+const OUTER_PAVE_EAST_PATH = [
+  [50.5, 34.0],   // south end (near the SE corner of the lawn)
+  [49.5, 28.0],
+  [51.5, 22.0],
+  [53.0, 17.0],
+  [50.5, 12.0],
+  [51.5,  6.0],   // north end
+];
+
+function addOuterLawnPavement(root) {
+  const path = buildOuterPavementPath(OUTER_PAVE_EAST_PATH);
+  if (path) root.add(path);
 }
 
 // One window unit: glass pane + thin wooden frame.
