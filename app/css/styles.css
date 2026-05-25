@@ -901,17 +901,20 @@ html, body {
   color: var(--text-2);
 }
 
-/* Language toggle button at the bottom of the mobile drawer. */
-.mobile-section.mobile-lang {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+/* Language toggle — sits in the mobile drawer header beside the
+   close button. Small icon-button style so it doesn't crowd the
+   title row. */
+.drawer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .lang-toggle {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: 0;
-  height: 52px;
+  min-width: 36px;
+  padding: 0 10px;
 }
 
 .mobile-floors {
