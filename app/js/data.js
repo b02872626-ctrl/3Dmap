@@ -184,17 +184,17 @@ const CAM_PLAN_BOUNDS = { minX: 0, maxX: 44, minZ: 0, maxZ: 33 };
 // =============================================================
 
 const ABA_CATEGORIES = {
-  entrance:   { label: "Entrance",                 color: 0xe2a39e },
-  royal:      { label: "Aba Jifar II",             color: 0xd9cca0 },
-  history:    { label: "Founding History",         color: 0xb89f74 },
-  religion:   { label: "Religion in the Kingdom",  color: 0xc88a6e },
-  kingdom:    { label: "Gibe Kingdom",             color: 0x7d4e34 },
-  governance: { label: "Governance",               color: 0x5e6537 },
-  economy:    { label: "Economy",                  color: 0x6e4a2c },
-  culture:    { label: "Wrestling & Sport",        color: 0x9d9888 },
-  ceremonial: { label: "Ceremonial Halls",         color: 0xd1b25c },
-  womens:     { label: "Women in the Kingdom",     color: 0xc97784 },
-  family:     { label: "Family Rooms",             color: 0xb29a72 },
+  entrance:   { label: "Entrance",                 labelAm: "መግቢያ",                   color: 0xe2a39e },
+  royal:      { label: "Aba Jifar II",             labelAm: "አባ ጂፋር II",               color: 0xd9cca0 },
+  history:    { label: "Founding History",         labelAm: "የመቋቋም ታሪክ",              color: 0xb89f74 },
+  religion:   { label: "Religion in the Kingdom",  labelAm: "ሃይማኖት በመንግሥቱ",          color: 0xc88a6e },
+  kingdom:    { label: "Gibe Kingdom",             labelAm: "የጊቤ መንግሥት",              color: 0x7d4e34 },
+  governance: { label: "Governance",               labelAm: "አስተዳደር",                color: 0x5e6537 },
+  economy:    { label: "Economy",                  labelAm: "ኢኮኖሚ",                   color: 0x6e4a2c },
+  culture:    { label: "Wrestling & Sport",        labelAm: "ትግል እና ስፖርት",           color: 0x9d9888 },
+  ceremonial: { label: "Ceremonial Halls",         labelAm: "ሥነ ሥርዓት አዳራሾች",        color: 0xd1b25c },
+  womens:     { label: "Women in the Kingdom",     labelAm: "ሴቶች በመንግሥቱ",            color: 0xc97784 },
+  family:     { label: "Family Rooms",             labelAm: "የቤተሰብ ክፍሎች",            color: 0xb29a72 },
 };
 
 const ABA_FLOORS = [
@@ -440,7 +440,9 @@ const BUILDING_LIST = [
   {
     id:         "cam",
     name:       "Cincinnati Art Museum",
+    nameAm:     "የሲንሲናቲ ጥበብ ሙዚየም",
     subtitle:   "3D Visitor Guide",
+    subtitleAm: "3D ጎብኚ መመሪያ",
     icon:       "✻",
     accent:     "#ff4d6a",
     categories: CAM_CATEGORIES,
@@ -452,7 +454,9 @@ const BUILDING_LIST = [
   {
     id:         "aba-jifar",
     name:       "Aba Jifar Palace",
+    nameAm:     "የአባ ጂፋር ቤተ መንግሥት",
     subtitle:   "Historic site • Jimma, Ethiopia",
+    subtitleAm: "ታሪካዊ ቦታ • ጅማ፣ ኢትዮጵያ",
     icon:       "◈",
     accent:     "#c9714f",
     style:      "situm",             // SVG-as-floor + extruded room blocks

@@ -901,6 +901,19 @@ html, body {
   color: var(--text-2);
 }
 
+/* Language toggle button at the bottom of the mobile drawer. */
+.mobile-section.mobile-lang {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.lang-toggle {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
+  height: 52px;
+}
+
 .mobile-floors {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

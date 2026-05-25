@@ -22,29 +22,29 @@
     <nav class="building-tabs" id="building-tabs" role="tablist" aria-label="Buildings"></nav>
     <div class="search">
       <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M10 2a8 8 0 1 1-5.3 14L1 19.7 2.3 21l3.7-3.7A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
-      <input id="search-input" type="text" placeholder="Search galleries, amenities…" autocomplete="off" />
+      <input id="search-input" type="text" data-i18n-placeholder="topbar.search" placeholder="Search galleries, amenities…" autocomplete="off" />
       <ul id="search-results"></ul>
     </div>
     <div id="toggle-view" class="view-toggle" role="group" aria-label="Camera view mode" title="Switch between isometric and top-down view">
-      <button type="button" class="view-toggle-option active" data-mode="iso"  aria-pressed="true">Iso</button>
-      <button type="button" class="view-toggle-option"        data-mode="top"  aria-pressed="false">Top</button>
+      <button type="button" class="view-toggle-option active" data-mode="iso"  aria-pressed="true"  data-i18n="topbar.iso">Iso</button>
+      <button type="button" class="view-toggle-option"        data-mode="top"  aria-pressed="false" data-i18n="topbar.top">Top</button>
     </div>
     <button id="open-directions" class="topbar-btn" title="Get directions">
       <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4zM9 14v-3h4V8.5l3.5 3-3.5 3V14H10v.01z"/></svg>
-      <span>Directions</span>
+      <span data-i18n="topbar.directions">Directions</span>
     </button>
   </header>
 
   <!-- Directions panel (left, opens via button) -->
   <section class="directions" id="directions" aria-hidden="true">
     <div class="directions-header">
-      <h3>Directions</h3>
+      <h3 data-i18n="directions.title">Directions</h3>
       <button id="dir-close" class="icon-btn" aria-label="Close">×</button>
     </div>
 
     <div class="dir-slot" data-slot="start">
       <span class="dir-dot start"></span>
-      <input id="dir-start-label" type="text" placeholder="Choose start point" readonly />
+      <input id="dir-start-label" type="text" data-i18n-placeholder="directions.start" placeholder="Choose start point" readonly />
       <button class="dir-clear" data-slot="start" aria-label="Clear start">×</button>
     </div>
 
@@ -52,24 +52,24 @@
 
     <div class="dir-slot" data-slot="end">
       <span class="dir-dot end"></span>
-      <input id="dir-end-label" type="text" placeholder="Choose destination" readonly />
+      <input id="dir-end-label" type="text" data-i18n-placeholder="directions.end" placeholder="Choose destination" readonly />
       <button class="dir-clear" data-slot="end" aria-label="Clear destination">×</button>
     </div>
 
     <div class="dir-actions">
-      <button id="dir-swap" class="ghost-btn" title="Swap start and destination">↑↓ Swap</button>
-      <button id="dir-clear-all" class="ghost-btn">Clear route</button>
+      <button id="dir-swap" class="ghost-btn" title="Swap start and destination" data-i18n="directions.swap">↑↓ Swap</button>
+      <button id="dir-clear-all" class="ghost-btn" data-i18n="directions.clear">Clear route</button>
     </div>
 
     <div class="dir-summary" id="dir-summary"></div>
-    <div class="dir-hint" id="dir-hint">Click any room to set the highlighted point.</div>
+    <div class="dir-hint" id="dir-hint" data-i18n="directions.hint">Click any room to set the highlighted point.</div>
 
     <div class="dir-steps" id="dir-steps" aria-hidden="true"></div>
   </section>
 
   <!-- Floor switcher (right) -->
   <aside class="floor-switcher">
-    <button data-floor="all" class="active" title="Show all floors stacked">All</button>
+    <button data-floor="all" class="active" title="Show all floors stacked" data-i18n="floor.all">All</button>
     <button data-floor="3"   title="Third Floor">3</button>
     <button data-floor="2"   title="Second Floor">2</button>
     <button data-floor="1"   title="First Floor">1</button>
@@ -82,13 +82,13 @@
        (when a room is selected on the map). -->
   <aside class="legend" id="legend">
     <div id="legend-categories">
-      <h3>Collections</h3>
+      <h3 data-i18n="drawer.collections">Collections</h3>
       <ul id="legend-list"></ul>
     </div>
     <div id="legend-info" hidden>
       <button class="legend-back" id="legend-back" type="button" aria-label="Back to collections">
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M15.5 4 7 12.5 15.5 21l1.4-1.4-7-7 7-7z"/></svg>
-        Collections
+        <span data-i18n="drawer.collections">Collections</span>
       </button>
       <div class="room-pic" id="room-pic"></div>
       <span class="chip" id="info-chip">—</span>
@@ -97,7 +97,7 @@
       <dl id="info-meta"></dl>
       <button class="primary-btn full" id="info-directions" type="button">
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4zM9 14v-3h4V8.5l3.5 3-3.5 3V14H10v.01z"/></svg>
-        Get Directions
+        <span data-i18n="drawer.directions">Get Directions</span>
       </button>
     </div>
   </aside>
@@ -109,7 +109,7 @@
   <div class="mobile-bottom-bar" id="mobile-bottom-bar">
     <button class="primary-btn full" id="bottom-directions">
       <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4z"/></svg>
-      Get Directions
+      <span data-i18n="drawer.directions">Get Directions</span>
     </button>
   </div>
 
@@ -121,27 +121,27 @@
   <aside class="mobile-drawer" id="mobile-drawer" aria-hidden="true">
     <div class="mobile-drawer-head">
       <div>
-        <h3>Cincinnati Art Museum</h3>
-        <p class="mobile-sub">3D Visitor Guide</p>
+        <h3 id="mobile-drawer-name">Cincinnati Art Museum</h3>
+        <p class="mobile-sub" id="mobile-drawer-sub">3D Visitor Guide</p>
       </div>
       <button class="icon-btn" id="mobile-close" aria-label="Close menu">×</button>
     </div>
 
     <div class="mobile-search">
       <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M10 2a8 8 0 1 1-5.3 14L1 19.7 2.3 21l3.7-3.7A8 8 0 0 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
-      <input id="mobile-search-input" type="text" placeholder="Search galleries, amenities…" autocomplete="off" />
+      <input id="mobile-search-input" type="text" data-i18n-placeholder="topbar.search" placeholder="Search galleries, amenities…" autocomplete="off" />
       <ul id="mobile-search-results"></ul>
     </div>
 
     <button class="primary-btn full" id="mobile-directions">
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.6 1.2a2 2 0 0 1 2.8 0l8.4 8.4a2 2 0 0 1 0 2.8l-8.4 8.4a2 2 0 0 1-2.8 0L3.2 12.4a2 2 0 0 1 0-2.8l8.4-8.4z"/></svg>
-      Get Directions
+      <span data-i18n="drawer.directions">Get Directions</span>
     </button>
 
     <div class="mobile-section">
-      <h4>Floor</h4>
+      <h4 data-i18n="drawer.floor">Floor</h4>
       <div class="mobile-floors" id="mobile-floors">
-        <button data-mobile-floor="all" class="active">All</button>
+        <button data-mobile-floor="all" class="active" data-i18n="floor.all">All</button>
         <button data-mobile-floor="3">3</button>
         <button data-mobile-floor="2">2</button>
         <button data-mobile-floor="1">1</button>
@@ -149,19 +149,24 @@
     </div>
 
     <div class="mobile-section">
-      <h4>View</h4>
-      <button class="ghost-btn full" id="mobile-explode">Toggle exploded view</button>
-      <button class="ghost-btn full" id="mobile-reset" style="margin-top:6px">Reset camera</button>
+      <h4 data-i18n="drawer.view">View</h4>
+      <button class="ghost-btn full" id="mobile-explode" data-i18n="drawer.explode">Toggle exploded view</button>
+      <button class="ghost-btn full" id="mobile-reset" style="margin-top:6px" data-i18n="drawer.reset">Reset camera</button>
     </div>
 
     <div class="mobile-section">
-      <h4>Collections</h4>
+      <h4 data-i18n="drawer.collections">Collections</h4>
       <ul class="mobile-legend" id="mobile-legend"></ul>
+    </div>
+
+    <!-- Language toggle — swaps the visible UI between English and Amharic. -->
+    <div class="mobile-section mobile-lang">
+      <button class="ghost-btn full lang-toggle" id="lang-toggle" aria-label="Change language">አ</button>
     </div>
   </aside>
 
   <!-- Loader -->
-  <div class="loader" id="loader"><div class="spinner"></div><span>Building map…</span></div>
+  <div class="loader" id="loader"><div class="spinner"></div><span data-i18n="loader.building">Building map…</span></div>
 
   <script type="module" src="js/main.js"></script>
 </body>

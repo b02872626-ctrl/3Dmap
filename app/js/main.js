@@ -22,6 +22,115 @@ const PLAN_CENTER = {
 import { buildGraph, findPath, describePath } from "./pathfinding.js";
 import { createRouteLayer } from "./route.js";
 
+// =============================================================
+//  i18n — English ↔ Amharic UI strings. Toggle via the lang-toggle
+//  button in the mobile drawer; choice is persisted in localStorage.
+//  Per-category labels live on CATEGORIES (labelAm); building tab
+//  name + subtitle live on BUILDING_LIST entries (nameAm / subtitleAm).
+// =============================================================
+const I18N = {
+  en: {
+    "topbar.search":      "Search galleries, amenities…",
+    "topbar.iso":         "Iso",
+    "topbar.top":         "Top",
+    "topbar.directions":  "Directions",
+    "directions.title":   "Directions",
+    "directions.start":   "Choose start point",
+    "directions.end":     "Choose destination",
+    "directions.swap":    "↑↓ Swap",
+    "directions.clear":   "Clear route",
+    "directions.hint":    "Click any room to set the highlighted point.",
+    "drawer.collections": "Collections",
+    "drawer.floor":       "Floor",
+    "drawer.view":        "View",
+    "drawer.explode":     "Toggle exploded view",
+    "drawer.reset":       "Reset camera",
+    "drawer.directions":  "Get Directions",
+    "floor.all":          "All",
+    "loader.building":    "Building map…",
+  },
+  am: {
+    "topbar.search":      "ጋለሪዎችን፣ መገልገያዎችን ይፈልጉ…",
+    "topbar.iso":         "ኢሶ",
+    "topbar.top":         "ላይ",
+    "topbar.directions":  "አቅጣጫዎች",
+    "directions.title":   "አቅጣጫዎች",
+    "directions.start":   "የመነሻ ቦታ ይምረጡ",
+    "directions.end":     "መድረሻ ይምረጡ",
+    "directions.swap":    "↑↓ ቀይር",
+    "directions.clear":   "መንገድ አጥፋ",
+    "directions.hint":    "ለማስቀመጥ የሚፈልጉትን ክፍል ይጫኑ።",
+    "drawer.collections": "ስብስቦች",
+    "drawer.floor":       "ወለል",
+    "drawer.view":        "እይታ",
+    "drawer.explode":     "የተፈነዳ እይታ",
+    "drawer.reset":       "ካሜራ ዳግም ጀምር",
+    "drawer.directions":  "አቅጣጫ ያግኙ",
+    "floor.all":          "ሁሉም",
+    "loader.building":    "ካርታ በመገንባት ላይ…",
+  },
+};
+
+let currentLang = (function () {
+  try { return localStorage.getItem("lang") || "en"; } catch { return "en"; }
+})();
+
+function t(key) {
+  return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key;
+}
+
+function categoryLabel(cat) {
+  return (currentLang === "am" && cat?.labelAm) ? cat.labelAm : cat?.label;
+}
+function buildingName(b) {
+  return (currentLang === "am" && b?.nameAm) ? b.nameAm : b?.name;
+}
+function buildingSubtitle(b) {
+  return (currentLang === "am" && b?.subtitleAm) ? b.subtitleAm : b?.subtitle;
+}
+
+function applyLanguage(lang) {
+  currentLang = lang;
+  try { localStorage.setItem("lang", lang); } catch {}
+  document.documentElement.lang = lang === "am" ? "am" : "en";
+
+  // Static text & placeholders flagged with data-i18n / data-i18n-placeholder.
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+
+  // Dynamic category labels (legend rows, info chip, etc.) tagged
+  // data-i18n-cat="<category-key>".
+  document.querySelectorAll("[data-i18n-cat]").forEach((el) => {
+    const cat = CATEGORIES[el.dataset.i18nCat];
+    if (cat) el.textContent = categoryLabel(cat);
+  });
+
+  // Building tabs — name + subtitle.
+  document.querySelectorAll(".building-tab").forEach((el) => {
+    const b = BUILDINGS.find((x) => x.id === el.dataset.buildingId);
+    if (!b) return;
+    const nameEl = el.querySelector(".tab-name");
+    const subEl  = el.querySelector(".tab-sub");
+    if (nameEl) nameEl.textContent = buildingName(b);
+    if (subEl)  subEl.textContent  = buildingSubtitle(b);
+  });
+
+  // Mobile drawer header — current building only.
+  const mNameEl = document.getElementById("mobile-drawer-name");
+  const mSubEl  = document.getElementById("mobile-drawer-sub");
+  if (mNameEl) mNameEl.textContent = buildingName(ACTIVE_BUILDING);
+  if (mSubEl)  mSubEl.textContent  = buildingSubtitle(ACTIVE_BUILDING);
+
+  // Toggle button shows the OTHER language as a hint to switch.
+  document.querySelectorAll(".lang-toggle").forEach((el) => {
+    el.textContent = lang === "am" ? "EN" : "አ";
+  });
+}
+
 const canvas = document.getElementById("stage");
 const { renderer, scene, camera, controls, start, fbxLoader } = createScene(canvas);
 
@@ -301,7 +410,8 @@ function showRoomInLegend(room) {
 
   infoTitle.textContent = room.name;
   infoSub.textContent   = `Room ${room.id} · Floor ${room.floor}`;
-  infoChip.textContent  = cat.label;
+  infoChip.textContent  = categoryLabel(cat);
+  infoChip.dataset.i18nCat = room.category;
   infoChip.style.background = color;
 
   roomPicEl.innerHTML = "";
@@ -311,7 +421,7 @@ function showRoomInLegend(room) {
   infoMeta.innerHTML = "";
   const meta = [
     ["Floor",     `${room.floor}`],
-    ["Category",  cat.label],
+    ["Category",  categoryLabel(cat)],
     ["Footprint", `${room.footprint.w.toFixed(1)} × ${room.footprint.d.toFixed(1)} m`],
   ];
   if (room.feature)  meta.push(["Type", "Special Feature"]);
@@ -535,7 +645,7 @@ for (const [key, cat] of Object.entries(CATEGORIES)) {
   li.dataset.cat = key;
   li.innerHTML = `
     <span class="swatch" style="background:#${cat.color.toString(16).padStart(6, "0")}"></span>
-    <span>${cat.label}</span>
+    <span data-i18n-cat="${key}">${categoryLabel(cat)}</span>
   `;
   li.addEventListener("click", () => {
     if (activeCategories.has(key)) {
@@ -654,11 +764,11 @@ document.addEventListener("click", (e) => {
     btn.innerHTML = `
       <span class="tab-mark">${b.icon ?? "✻"}</span>
       <span class="tab-text">
-        <span class="tab-name">${b.name}</span>
-        <span class="tab-sub">${b.subtitle}</span>
+        <span class="tab-name">${buildingName(b)}</span>
+        <span class="tab-sub">${buildingSubtitle(b)}</span>
       </span>
     `;
-    btn.title = `${b.name} — ${b.subtitle}`;
+    btn.title = `${buildingName(b)} — ${buildingSubtitle(b)}`;
     btn.addEventListener("click", () => {
       if (b.id === ACTIVE_BUILDING.id) return;
       // Switch by URL param — page reload picks up the new building data.
@@ -1166,13 +1276,18 @@ document.getElementById("mobile-reset")?.addEventListener("click", () => {
   flyTo(new THREE.Vector3(0, 6, 0), new THREE.Vector3(50, 55, 50), 60);
 });
 
+// Language toggle — swaps the visible UI between English and Amharic.
+document.getElementById("lang-toggle")?.addEventListener("click", () => {
+  applyLanguage(currentLang === "am" ? "en" : "am");
+});
+
 // --- Collections legend (mobile) — populated from CATEGORIES ---
 const mobileLegendEl = document.getElementById("mobile-legend");
 if (mobileLegendEl) {
   for (const [key, cat] of Object.entries(CATEGORIES)) {
     const li = document.createElement("li");
     li.dataset.cat = key;
-    li.innerHTML = `<span class="swatch" style="background:#${cat.color.toString(16).padStart(6,"0")}"></span><span>${cat.label}</span>`;
+    li.innerHTML = `<span class="swatch" style="background:#${cat.color.toString(16).padStart(6,"0")}"></span><span data-i18n-cat="${key}">${categoryLabel(cat)}</span>`;
     li.addEventListener("click", () => {
       if (activeCategories.has(key)) activeCategories.delete(key);
       else activeCategories.add(key);
@@ -1232,5 +1347,10 @@ function applyMobileMode(mobile) {
 }
 applyMobileMode(isMobileMQ.matches);
 isMobileMQ.addEventListener?.("change", (e) => applyMobileMode(e.matches));
+
+// Apply the persisted (or default) language on load — runs after all
+// static + dynamic UI has been wired up so legend / building-tab /
+// drawer header all pick up their initial translations correctly.
+applyLanguage(currentLang);
 
 window.__cam = { scene, camera, controls, floorGroups, roomGroups, graph, routeLayer };
