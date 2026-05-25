@@ -95,15 +95,9 @@ export function buildFloors() {
   // floor views. Sits below all floor groups; individual floors layer
   // their own platforms / buildings on top.
   if (isSitum) {
-    // All scene-root outdoor pieces (lawn backdrop, trees, lamps, gate,
-    // benches, hedges, shrubs, etc.) live inside a single wrapper
-    // group tagged so main.js can hide it whenever the user toggles
-    // a specific floor (only the chosen floor's rooms stay visible).
-    const sceneOutdoorDecor = new THREE.Group();
-    sceneOutdoorDecor.name = "scene-outdoor-decor";
-    sceneOutdoorDecor.userData.kind = "sceneOutdoorDecor";
-    root.add(sceneOutdoorDecor);
-
+    // Grass backdrop stays on root directly — visible under every
+    // floor selection (including single-floor views) so the buildings
+    // never appear to float in a void.
     const grassBG = new THREE.Mesh(
       new THREE.PlaneGeometry(260, 260),
       terrainGrassMat,
@@ -112,7 +106,16 @@ export function buildFloors() {
     grassBG.position.set(0, -1.55, 0);
     grassBG.receiveShadow = true;
     grassBG.userData.kind = "grass-bg";
-    sceneOutdoorDecor.add(grassBG);
+    root.add(grassBG);
+
+    // All other scene-root outdoor pieces (trees, lamps, gate,
+    // benches, planters, hedges, shrubs, signage, grass color
+    // patches) live inside a wrapper group tagged so main.js can
+    // hide them whenever the user toggles a specific floor.
+    const sceneOutdoorDecor = new THREE.Group();
+    sceneOutdoorDecor.name = "scene-outdoor-decor";
+    sceneOutdoorDecor.userData.kind = "sceneOutdoorDecor";
+    root.add(sceneOutdoorDecor);
 
     if (LANDSCAPE_DECOR) addLandscapeDecor(sceneOutdoorDecor);
     try {
