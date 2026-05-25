@@ -1862,9 +1862,13 @@ const LP_DOOR_H          = 1.20;
 const LP_EDGE_MIN_FOR_WINDOWS = 1.8;   // skip windows on edges shorter than this
 
 const lpWindowGlassMat = new THREE.MeshStandardMaterial({
-  color: LP_WINDOW_GLASS, roughness: 0.3, metalness: 0.4,
-  emissive: 0x1a2632, emissiveIntensity: 0.25,
+  color: LP_WINDOW_GLASS, roughness: 0.18, metalness: 0.45,
+  // Warm emissive + low alpha so the panes read as illuminated panels
+  // letting daylight into the open-topped rooms behind them.
+  emissive: 0xfff1c4, emissiveIntensity: 0.85,
+  transparent: true, opacity: 0.45,
   flatShading: true, side: THREE.DoubleSide,
+  depthWrite: false,
 });
 const lpWindowFrameMat = new THREE.MeshStandardMaterial({
   color: LP_WINDOW_FRAME, roughness: 0.8, metalness: 0,
@@ -2168,6 +2172,34 @@ const interiorBenchMat = new THREE.MeshStandardMaterial({
 const interiorPedestalMat = new THREE.MeshStandardMaterial({
   color: 0xb9af9a, roughness: 0.92, metalness: 0, flatShading: true,
 });
+const interiorRugMat = new THREE.MeshStandardMaterial({
+  color: 0x7d3a2a, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const interiorPlaqueMat = new THREE.MeshStandardMaterial({
+  color: 0x86663a, roughness: 0.6, metalness: 0.35, flatShading: true,
+});
+const interiorVitrineMat = new THREE.MeshStandardMaterial({
+  color: 0xb9d2dd, roughness: 0.18, metalness: 0.4,
+  transparent: true, opacity: 0.32,
+  flatShading: true, side: THREE.DoubleSide, depthWrite: false,
+});
+const interiorVitrineBaseMat = new THREE.MeshStandardMaterial({
+  color: 0x2d2018, roughness: 0.75, metalness: 0, flatShading: true,
+});
+
+// Tiny helper — does `(px, pz)` lie inside the polygon?
+function _pointInPoly2D(px, pz, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], zi = poly[i][1];
+    const xj = poly[j][0], zj = poly[j][1];
+    if (((zi > pz) !== (zj > pz)) &&
+        (px < (xj - xi) * (pz - zi) / (zj - zi + 1e-12) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 
 function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
                                   wallsBaseY, wallHeight) {
@@ -2181,8 +2213,30 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
   cx /= polygonLocal.length;
   cz /= polygonLocal.length;
 
-  // 1. Small stone pedestal at the centroid, with the existing
-  //    category-themed ornament sitting on top.
+  // Polygon bbox — for rug sizing and corner-prop placement.
+  let pminX = Infinity, pmaxX = -Infinity, pminZ = Infinity, pmaxZ = -Infinity;
+  for (const [x, z] of polygonLocal) {
+    if (x < pminX) pminX = x; if (x > pmaxX) pmaxX = x;
+    if (z < pminZ) pminZ = z; if (z > pmaxZ) pmaxZ = z;
+  }
+  const roomW = pmaxX - pminX;
+  const roomD = pmaxZ - pminZ;
+
+  // 1. Rust-red rug under the centerpiece — gives the floor visual
+  //    centre and reads through the open top.
+  const rugW = Math.min(2.2, roomW * 0.55);
+  const rugD = Math.min(1.6, roomD * 0.55);
+  const rug = new THREE.Mesh(
+    new THREE.PlaneGeometry(rugW, rugD),
+    interiorRugMat,
+  );
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(cx, wallsBaseY + 0.01, cz);
+  rug.receiveShadow = true;
+  group.add(rug);
+
+  // 2. Small stone pedestal at the centroid, with the category-themed
+  //    ornament on top.
   const PEDESTAL_W = 0.45;
   const PEDESTAL_H = 0.35;
   const ped = new THREE.Mesh(
@@ -2197,8 +2251,54 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
   const ornament = buildRoomOrnament(room, cx, cz, wallsBaseY + PEDESTAL_H);
   if (ornament) group.add(ornament);
 
-  // 2. Walk polygon edges — paintings on each non-shared (external)
-  //    edge, and one bench against the first long external wall.
+  // 3. Up to two corner display pedestals (smaller, with a tiny cube /
+  //    sphere artefact on top) — placed only if they fit inside the
+  //    polygon and don't collide with the centerpiece.
+  const cornerOffsets = [
+    [ 0.85,  0.85],
+    [-0.85,  0.85],
+    [ 0.85, -0.85],
+    [-0.85, -0.85],
+  ];
+  const usedCorners = [];
+  for (const [dx, dz] of cornerOffsets) {
+    if (usedCorners.length >= 2) break;
+    const cpx = cx + dx;
+    const cpz = cz + dz;
+    if (!_pointInPoly2D(cpx, cpz, polygonLocal)) continue;
+    // Skip if too close to the centerpiece pedestal.
+    if (Math.hypot(cpx - cx, cpz - cz) < 1.0) continue;
+
+    const SMALL_W = 0.30;
+    const SMALL_H = 0.55;
+    const smallPed = new THREE.Mesh(
+      new THREE.BoxGeometry(SMALL_W, SMALL_H, SMALL_W),
+      interiorPedestalMat,
+    );
+    smallPed.position.set(cpx, wallsBaseY + SMALL_H / 2, cpz);
+    smallPed.castShadow = true;
+    smallPed.receiveShadow = true;
+    group.add(smallPed);
+
+    // Tiny artefact — alternates sphere ↔ cube per corner.
+    const artefact = (usedCorners.length % 2 === 0)
+      ? new THREE.Mesh(
+          new THREE.SphereGeometry(0.10, 10, 8),
+          interiorTrimMat,
+        )
+      : new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.18, 0.18),
+          lpOrnamentStone,
+        );
+    artefact.position.set(cpx, wallsBaseY + SMALL_H + 0.12, cpz);
+    artefact.castShadow = true;
+    group.add(artefact);
+    usedCorners.push([cpx, cpz]);
+  }
+
+  // 4. Walk polygon edges — framed painting + brass plaque on each
+  //    non-shared (external) wall, plus one bench against the longest
+  //    wall.
   const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
   let benchPlaced = false;
 
@@ -2222,16 +2322,16 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
     const inwardZ =  ux * areaSign;
     const mx = ax + ex / 2;
     const mz = az + ez / 2;
+    const paintYaw = Math.atan2(inwardX, inwardZ);
 
     // --- Framed painting at wall-mid height, slightly inset so the
     //     trim doesn't z-fight the wall face. ---
     const paintW = Math.min(0.7, edgeLen * 0.35);
     const paintH = 0.42;
-    const paintY = wallsBaseY + wallHeight * 0.58;
+    const paintY = wallsBaseY + wallHeight * 0.60;
     const paintInset = 0.04;
     const ppx = mx + inwardX * paintInset;
     const ppz = mz + inwardZ * paintInset;
-    const paintYaw = Math.atan2(inwardX, inwardZ);
 
     const trim = new THREE.Mesh(
       new THREE.PlaneGeometry(paintW + 0.08, paintH + 0.08),
@@ -2252,6 +2352,22 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
     );
     canvas.rotation.y = paintYaw;
     group.add(canvas);
+
+    // --- Small brass plaque just below the painting (museum caption). ---
+    const plaqueW = Math.min(0.28, paintW * 0.55);
+    const plaqueH = 0.10;
+    const plaqueY = paintY - paintH / 2 - 0.10;
+    const plaque = new THREE.Mesh(
+      new THREE.PlaneGeometry(plaqueW, plaqueH),
+      interiorPlaqueMat,
+    );
+    plaque.position.set(
+      ppx + inwardX * 0.006,
+      plaqueY,
+      ppz + inwardZ * 0.006,
+    );
+    plaque.rotation.y = paintYaw;
+    group.add(plaque);
 
     // --- Bench against the first long external wall ---
     if (!benchPlaced && edgeLen > 1.8) {
@@ -2276,6 +2392,34 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
       seat.receiveShadow = true;
       group.add(seat);
       benchPlaced = true;
+    }
+  }
+
+  // 5. One translucent glass vitrine offset from the centerpiece for
+  //    rooms that are large enough to fit it without colliding.
+  if (roomW > 3.0 && roomD > 3.0) {
+    const vcx = cx + 1.2;
+    const vcz = cz - 0.2;
+    if (_pointInPoly2D(vcx, vcz, polygonLocal)) {
+      const VITRINE_W = 0.65;
+      const VITRINE_H = 0.85;
+      const VITRINE_D = 0.40;
+      // Dark wooden base under the glass case.
+      const vbase = new THREE.Mesh(
+        new THREE.BoxGeometry(VITRINE_W, 0.18, VITRINE_D),
+        interiorVitrineBaseMat,
+      );
+      vbase.position.set(vcx, wallsBaseY + 0.09, vcz);
+      vbase.castShadow = true;
+      vbase.receiveShadow = true;
+      group.add(vbase);
+      // Glass cube on top.
+      const vglass = new THREE.Mesh(
+        new THREE.BoxGeometry(VITRINE_W - 0.04, VITRINE_H, VITRINE_D - 0.04),
+        interiorVitrineMat,
+      );
+      vglass.position.set(vcx, wallsBaseY + 0.18 + VITRINE_H / 2, vcz);
+      group.add(vglass);
     }
   }
 }
