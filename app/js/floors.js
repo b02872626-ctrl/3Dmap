@@ -1371,9 +1371,11 @@ const PLAZA_GRASS_PATCHES = [
   [[34.0, 11.5], [PLAZA_GRASS_W_MAX, 11.5],
    [PLAZA_GRASS_W_MAX, 31.0], [34.0, 31.0]],
 
-  // 3. South strip — well south of the south spine
-  [[18.0, PLAZA_GRASS_N_MAX - 2.0], [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MAX - 2.0],
-   [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MAX], [18.0, PLAZA_GRASS_N_MAX]],
+  // 3. South strip — well south of the south spine. West edge pulled
+  //    east from x=18 to x=20.5 so it no longer touches the main-
+  //    entrance staircase (stair east edge sits at x ≈ 19.1).
+  [[20.5, PLAZA_GRASS_N_MAX - 2.0], [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MAX - 2.0],
+   [PLAZA_GRASS_W_MAX, PLAZA_GRASS_N_MAX], [20.5, PLAZA_GRASS_N_MAX]],
 
   // 4. SW patch — between palace platform and plaza SW corner
   [[PLAZA_GRASS_W_MIN, 28.0], [8.0, 28.0],
@@ -3752,9 +3754,11 @@ function addExteriorLampPosts(root) {
 
 // --- South-entrance compound gate ---
 function addExteriorEntranceGate(root) {
-  // Wp-main-entrance sits at (14.5, 33). Build the gate ~3 m south
-  // of it at z ≈ 36 so visitors walk through it onto the plaza.
-  const cxPlan = 14.5;
+  // Centre the gate on the main-entrance staircase top (auto-stair
+  // builder spans the main-entrance corridor — religion-sw (12.8) to
+  // spine-1 (19.5) with a 0.4 m inset on each side → 13.2–19.1, midpoint
+  // 16.15). Match its width so the gate frames the stairs cleanly.
+  const cxPlan = 16.15;
   const czPlan = 36.2;
   const cx = offsetX(cxPlan);
   const cz = offsetZ(czPlan);
@@ -3762,7 +3766,7 @@ function addExteriorEntranceGate(root) {
   // Two stone piers
   const PIER_W = 0.55;
   const PIER_H = 2.6;
-  const PIER_SPACING = 3.4;
+  const PIER_SPACING = 5.4;   // matches the stair width (5.9 m visible)
   for (const sgn of [-1, 1]) {
     const pier = new THREE.Mesh(
       new THREE.BoxGeometry(PIER_W, PIER_H, PIER_W),
@@ -3950,8 +3954,9 @@ function addExteriorHedges(root) {
   const baseY = LAMP_PLAZA_Y;
   const hedges = [
     // South strip flanking the south corridor — one band running
-    // along the path's south side.
-    [ 7.0, 36.0, 13.0, 36.0],
+    // along the path's south side. West and east segments leave a
+    // ~1 m gap from the main-entrance staircase (x ≈ 13.2–19.1).
+    [ 7.0, 36.0, 12.0, 36.0],
     [21.0, 36.0, 32.0, 36.0],
     [33.5, 36.0, 45.0, 36.0],
     // North strip (just south of the religion-sw → main-entrance edge)
