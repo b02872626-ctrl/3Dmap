@@ -6,10 +6,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { FBXLoader }     from "three/addons/loaders/FBXLoader.js";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass }     from "three/addons/postprocessing/RenderPass.js";
-import { SSAOPass }       from "three/addons/postprocessing/SSAOPass.js";
-import { OutputPass }     from "three/addons/postprocessing/OutputPass.js";
 
 // Direction from target to camera, normalized. ~35° tilt above horizon
 // with a 45° yaw — classic isometric.
@@ -153,26 +149,11 @@ export function createScene(canvas) {
   // grid.material.opacity = 0.18;
   // scene.add(grid);
 
-  // ---------------- Post-processing: SSAO ----------------
-  // Soft contact shadows at every wall ↔ ground / column ↔ floor /
-  // building ↔ platform junction. Without this the model reads flat
-  // even with crisp direct lighting.
-  const composer = new EffectComposer(renderer);
-  composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  composer.setSize(window.innerWidth, window.innerHeight);
-  composer.addPass(new RenderPass(scene, camera));
-  const ssao = new SSAOPass(
-    scene, camera, window.innerWidth, window.innerHeight,
-  );
-  // Tight contact-AO settings — small kernel, short range, so the
-  // effect reads as a soft shadow under each wall edge rather than a
-  // muddy darkening over open areas.
-  ssao.kernelRadius   = 0.8;
-  ssao.minDistance    = 0.002;
-  ssao.maxDistance    = 0.08;
-  ssao.output         = SSAOPass.OUTPUT.Default;
-  composer.addPass(ssao);
-  composer.addPass(new OutputPass());
+  // ---------------- Post-processing (disabled) ----------------
+  // SSAO pipeline temporarily removed — it was rendering the scene
+  // black on this Three.js version. The lighting + texture changes
+  // stay; we just go back to direct renderer.render() until we
+  // re-introduce post-processing safely.
 
   // ---------------- Resize ----------------
   window.addEventListener("resize", () => {
@@ -181,8 +162,6 @@ export function createScene(canvas) {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
-    composer.setSize(w, h);
-    ssao.setSize(w, h);
   });
 
   // ---------------- Render loop ----------------
@@ -190,7 +169,7 @@ export function createScene(canvas) {
     renderer.setAnimationLoop(() => {
       controls.update();
       if (onFrame) onFrame();
-      composer.render();
+      renderer.render(scene, camera);
     });
   }
 
