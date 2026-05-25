@@ -928,46 +928,140 @@ function buildSitePlaza() {
 }
 
 // Raised "inner plaza" that frames the building section like a
-// podium. Footprint = SITE_PLAZA rectangle minus the grass-patch
-// polygons (so the lawns appear as sunken openings inside the
-// raised area). Buildings + paths sit on this inner plaza top —
-// SITUM_BLOCK_LIFT and PATH_LIFT have been bumped to match.
-const INNER_PLAZA_LIFT = 0.13;
+// podium. Footprint is built PROGRAMMATICALLY from the underlying
+// data — no hand-traced polygon. It's the merged union of:
+//   · every floor-1 non-open room polygon padded outward by
+//     INNER_PLAZA_PAD,
+//   · a strip INNER_PLAZA_CORRIDOR_W wide along every primary +
+//     secondary waypoint edge,
+//   · a small disc at every waypoint to fill L-corner gaps where
+//     two corridors meet.
+// Each piece is extruded by INNER_PLAZA_LIFT, then everything is
+// merged with BufferGeometryUtils into one mesh + one material.
+const INNER_PLAZA_LIFT      = 0.13;
+const INNER_PLAZA_PAD       = 1.4;   // metres around each building polygon
+const INNER_PLAZA_CORRIDOR_W = 2.0;  // metres wide for path strips
+const INNER_PLAZA_NODE_R    = 1.2;   // metres radius for waypoint discs
+const INNER_PLAZA_NODE_SEG  = 16;    // disc tessellation
+
 const innerPlazaMat = new THREE.MeshStandardMaterial({
   color: 0xe1cda7, roughness: 0.92, metalness: 0, flatShading: true,
 });
 
-function buildInnerPlaza() {
+// Build an extruded polygon piece in non-indexed form so all pieces
+// can be merged with BufferGeometryUtils.mergeGeometries.
+function _innerPlazaPiece(polygonLocal) {
+  if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return null;
   const shape = new THREE.Shape();
-  const minX = offsetX(SITE_PLAZA.minX);
-  const maxX = offsetX(SITE_PLAZA.maxX);
-  const minZ = offsetZ(SITE_PLAZA.minZ);
-  const maxZ = offsetZ(SITE_PLAZA.maxZ);
-  shape.moveTo(minX, minZ);
-  shape.lineTo(maxX, minZ);
-  shape.lineTo(maxX, maxZ);
-  shape.lineTo(minX, maxZ);
-  shape.lineTo(minX, minZ);
-  // Punch the grass patches out so the lawn pokes through at its
-  // (lower) level.
-  for (const patch of PLAZA_GRASS_PATCHES) {
-    if (!Array.isArray(patch) || patch.length < 3) continue;
-    const hole = new THREE.Path();
-    for (let i = 0; i < patch.length; i++) {
-      const [x, z] = patch[i];
-      const lx = offsetX(x);
-      const lz = offsetZ(z);
-      if (i === 0) hole.moveTo(lx, lz); else hole.lineTo(lx, lz);
-    }
-    shape.holes.push(hole);
+  for (let i = 0; i < polygonLocal.length; i++) {
+    const [x, z] = polygonLocal[i];
+    if (i === 0) shape.moveTo(x, z); else shape.lineTo(x, z);
   }
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: INNER_PLAZA_LIFT, bevelEnabled: false,
   });
   geo.rotateX(Math.PI / 2);
-  const mesh = new THREE.Mesh(geo, innerPlazaMat);
-  // Bottom flush at outer-plaza top, top at outer-plaza top + lift.
-  mesh.position.y = PLATFORM_Y + PLATFORM_H + INNER_PLAZA_LIFT;
+  // Geometry now spans Y=0 → Y=-depth. Translate so bottom sits at
+  // outer-plaza top and top at outer-plaza top + lift.
+  geo.translate(0, PLATFORM_Y + PLATFORM_H + INNER_PLAZA_LIFT, 0);
+  return geo.toNonIndexed();
+}
+
+// Polygon for a single room's contribution to the podium — the room
+// polygon (or footprint rect fallback) offset outward by INNER_PLAZA_PAD.
+function _innerPlazaRoomPolygon(room) {
+  let polygonLocal;
+  if (Array.isArray(room.polygon) && room.polygon.length >= 3) {
+    polygonLocal = room.polygon.map(([px, py]) => [
+      px - planCenter.x, py - planCenter.z,
+    ]);
+  } else {
+    const { x, z, w, d } = room.footprint;
+    const inset = 0.06;
+    polygonLocal = [
+      [offsetX(x + inset),     offsetZ(z + inset)],
+      [offsetX(x + w - inset), offsetZ(z + inset)],
+      [offsetX(x + w - inset), offsetZ(z + d - inset)],
+      [offsetX(x + inset),     offsetZ(z + d - inset)],
+    ];
+  }
+  return offsetPolygonOutward(polygonLocal, INNER_PLAZA_PAD);
+}
+
+// Rectangular strip polygon (4 vertices) from waypoint a to b,
+// width perpendicular to the path direction.
+function _innerPlazaCorridorPolygon(a, b, width) {
+  const ax = offsetX(a.x), az = offsetZ(a.z);
+  const bx = offsetX(b.x), bz = offsetZ(b.z);
+  const dx = bx - ax, dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.05) return null;
+  const px = -dz / len, pz = dx / len;  // perpendicular unit vector
+  const hw = width / 2;
+  return [
+    [ax + px * hw, az + pz * hw],
+    [ax - px * hw, az - pz * hw],
+    [bx - px * hw, bz - pz * hw],
+    [bx + px * hw, bz + pz * hw],
+  ];
+}
+
+// Small disc polygon at a waypoint — fills L-corner gaps where two
+// corridors meet at a junction.
+function _innerPlazaNodePolygon(wp, radius, segments) {
+  const cx = offsetX(wp.x), cz = offsetZ(wp.z);
+  const verts = [];
+  for (let i = 0; i < segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    verts.push([cx + Math.cos(t) * radius, cz + Math.sin(t) * radius]);
+  }
+  return verts;
+}
+
+function buildInnerPlaza() {
+  const pieces = [];
+
+  // 1. Every floor-1 non-open room — building zone coverage.
+  for (const room of ROOMS) {
+    if (room.floor !== 1 || room.open) continue;
+    const piece = _innerPlazaPiece(_innerPlazaRoomPolygon(room));
+    if (piece) pieces.push(piece);
+  }
+
+  // 2. Path corridor strips for the primary + secondary edges.
+  if (WAYPOINTS && WAYPOINT_EDGES) {
+    const wpById = new Map(WAYPOINTS.map((w) => [w.id, w]));
+    for (const edge of WAYPOINT_EDGES) {
+      const [aId, bId, type = "primary"] = edge;
+      if (type === "return") continue;  // dashed loop doesn't extrude
+      const a = wpById.get(aId), b = wpById.get(bId);
+      if (!a || !b) continue;
+      const poly = _innerPlazaCorridorPolygon(a, b, INNER_PLAZA_CORRIDOR_W);
+      const piece = _innerPlazaPiece(poly);
+      if (piece) pieces.push(piece);
+    }
+
+    // 3. Disc at every waypoint to fill junction L-corners.
+    for (const wp of WAYPOINTS) {
+      if (wp.floor !== 1) continue;
+      const poly = _innerPlazaNodePolygon(wp, INNER_PLAZA_NODE_R, INNER_PLAZA_NODE_SEG);
+      const piece = _innerPlazaPiece(poly);
+      if (piece) pieces.push(piece);
+    }
+  }
+
+  if (pieces.length === 0) return null;
+  // Merge into one mesh so the whole podium is a single draw call.
+  const merged = BufferGeometryUtils.mergeGeometries(pieces);
+  if (!merged) {
+    // Defensive fallback — emit a Group of separate meshes if merge fails.
+    const grp = new THREE.Group();
+    for (const g of pieces) grp.add(new THREE.Mesh(g, innerPlazaMat));
+    return grp;
+  }
+  const mesh = new THREE.Mesh(merged, innerPlazaMat);
+  // Each piece was already positioned via geo.translate() before
+  // merging, so mesh stays at origin.
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
