@@ -8,6 +8,7 @@
 //  Hovering / clicking walks up from any hit child to that group.
 // =============================================================
 import * as THREE from "three";
+import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
 import { CATEGORIES, FLOORS, ROOMS, PLAN_BOUNDS, ROADS, DOORS, WAYPOINTS, WAYPOINT_EDGES, BUILDING_STYLE } from "./data.js";
 
 const SLAB_PAD       = 1.0;
@@ -112,6 +113,9 @@ export function buildFloors() {
     // false (top of file) to turn off, or trim the positions array in
     // addLandscapeDecor() to reduce density.
     if (LANDSCAPE_DECOR) addLandscapeDecor(root);
+    // Reference-sheet trees — five types in instanced clusters around
+    // the plaza perimeter. See addReferenceTrees() below.
+    addReferenceTrees(root);
 
     // Subtle low-poly grass color patches for ground variation.
     if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
@@ -1333,6 +1337,182 @@ function addLandscapeDecor(root) {
     [  9, 0,  20, 0.85],
   ];
   for (const [x, y, z, s] of ROCKS) root.add(buildRock(x, y, z, s));
+}
+
+// ====================================================================
+//  Reference-sheet trees — five low-poly types, clustered placement,
+//  instanced rendering. Spec from ABA JIFAR PALACE – TREES REFERENCE
+//  SHEET (low-poly, optimised, consistent style).
+//
+//  Types:                Height   Use
+//    A. Conifer tall      4.5 m   perimeter / background
+//    B. Conifer medium    3.0 m   midground / scattered
+//    C. Broadleaf round   4.0 m   feature areas / clusters
+//    D. Broadleaf small   2.5 m   near buildings / paths (on grass)
+//    E. Columnar accent   4.0 m   entrances / corners
+//
+//  Placement: only on grass outside the SITE_PLAZA, in clusters of
+//  2-5, never blocking entrances or route nodes.
+// ====================================================================
+const TREE_LEAF_COLORS = [
+  0x4A7C3E, 0x5CBF4A, 0x6FAE5B, 0x3B6B34, 0x547F43,
+];
+const TREE_TRUNK_COLOR = 0x5A3A23;
+const TREE_BASE_Y      = -1.55;    // sit on the lower grass plane
+
+// Hand-defined clusters around the plaza perimeter (raw plan coords).
+// Each entry: { type, x, z, s (scale), r (Y rotation rad) }.
+const TREE_POSITIONS = [
+  // NW cluster
+  { type: "A", x:  5, z:  -7, s: 1.00, r: 0.3 },
+  { type: "B", x:  9, z: -10, s: 1.00, r: 1.2 },
+  { type: "A", x: 13, z:  -6, s: 1.05, r: 2.1 },
+  // N-center
+  { type: "C", x: 22, z:  -8, s: 1.00, r: 0.5 },
+  { type: "B", x: 27, z: -10, s: 0.95, r: 1.5 },
+  // NE
+  { type: "A", x: 35, z:  -7, s: 1.05, r: 2.0 },
+  { type: "C", x: 41, z:  -9, s: 1.00, r: 0.8 },
+  { type: "D", x: 45, z:  -6, s: 0.90, r: 1.4 },
+  // East
+  { type: "A", x: 53, z:   5, s: 1.00, r: 0.4 },
+  { type: "B", x: 55, z:  12, s: 0.95, r: 1.6 },
+  { type: "C", x: 52, z:  18, s: 1.05, r: 2.3 },
+  // SE
+  { type: "C", x: 54, z:  28, s: 1.00, r: 0.7 },
+  { type: "A", x: 56, z:  35, s: 1.05, r: 1.9 },
+  { type: "D", x: 50, z:  41, s: 0.90, r: 2.5 },
+  // South
+  { type: "C", x: 38, z:  44, s: 1.00, r: 0.6 },
+  { type: "B", x: 30, z:  47, s: 0.95, r: 1.4 },
+  { type: "C", x: 22, z:  45, s: 1.00, r: 2.2 },
+  { type: "D", x:  6, z:  46, s: 0.90, r: 0.9 },
+  // SW
+  { type: "A", x:  0, z:  43, s: 1.00, r: 1.7 },
+  { type: "B", x: -2, z:  35, s: 0.95, r: 2.4 },
+  { type: "D", x: -4, z:  28, s: 0.90, r: 0.3 },
+  // West
+  { type: "C", x: -6, z:  20, s: 1.05, r: 1.1 },
+  { type: "A", x: -3, z:  12, s: 1.00, r: 2.0 },
+  { type: "B", x: -8, z:   5, s: 0.95, r: 0.7 },
+  // Columnar accents flanking the south entrance / node 1 approach
+  // (node 1 is at z=33; flank well to the south on the grass)
+  { type: "E", x:  9, z:  41, s: 1.00, r: 0 },
+  { type: "E", x: 20, z:  41, s: 1.00, r: 0 },
+];
+
+function _buildConiferGeo(totalH) {
+  // Trunk
+  const trunkH = totalH * 0.22;
+  const trunkR = totalH * 0.045;
+  const trunkRTop = totalH * 0.038;
+  const trunk = new THREE.CylinderGeometry(trunkRTop, trunkR, trunkH, 6);
+  trunk.translate(0, trunkH / 2, 0);
+
+  // 3 stacked cones forming the conifer silhouette
+  const fH    = totalH - trunkH * 0.7;
+  const base  = trunkH * 0.65;
+  const c1H = fH * 0.42, c1R = totalH * 0.24;
+  const c2H = fH * 0.34, c2R = totalH * 0.19;
+  const c3H = fH * 0.32, c3R = totalH * 0.13;
+  const c1 = new THREE.ConeGeometry(c1R, c1H, 6); c1.translate(0, base + c1H / 2, 0);
+  const c2 = new THREE.ConeGeometry(c2R, c2H, 6); c2.translate(0, base + c1H * 0.7 + c2H / 2, 0);
+  const c3 = new THREE.ConeGeometry(c3R, c3H, 6); c3.translate(0, base + c1H * 0.7 + c2H * 0.7 + c3H / 2, 0);
+  const foliage = BufferGeometryUtils.mergeGeometries([c1, c2, c3]);
+  return { trunkGeo: trunk, foliageGeo: foliage };
+}
+
+function _buildBroadleafGeo(totalH) {
+  const trunkH = totalH * 0.30;
+  const trunkR = totalH * 0.035;
+  const trunk = new THREE.CylinderGeometry(trunkR * 0.85, trunkR, trunkH, 6);
+  trunk.translate(0, trunkH / 2, 0);
+
+  const foliageR = totalH * 0.35;
+  const foliage = new THREE.IcosahedronGeometry(foliageR, 0);
+  foliage.translate(0, trunkH + foliageR * 0.78, 0);
+  return { trunkGeo: trunk, foliageGeo: foliage };
+}
+
+function _buildColumnarGeo(totalH) {
+  const trunkH = totalH * 0.18;
+  const trunkR = totalH * 0.030;
+  const trunk = new THREE.CylinderGeometry(trunkR, trunkR, trunkH, 6);
+  trunk.translate(0, trunkH / 2, 0);
+
+  const folH = totalH * 0.70;
+  const folR = totalH * 0.10;
+  const col = new THREE.CylinderGeometry(folR * 0.4, folR, folH, 8);
+  col.translate(0, trunkH * 0.4 + folH / 2, 0);
+  const cap = new THREE.IcosahedronGeometry(folR * 0.55, 0);
+  cap.translate(0, trunkH * 0.4 + folH + folR * 0.2, 0);
+  const foliage = BufferGeometryUtils.mergeGeometries([col, cap]);
+  return { trunkGeo: trunk, foliageGeo: foliage };
+}
+
+function addReferenceTrees(root) {
+  const geos = {
+    A: _buildConiferGeo(4.5),
+    B: _buildConiferGeo(3.0),
+    C: _buildBroadleafGeo(4.0),
+    D: _buildBroadleafGeo(2.5),
+    E: _buildColumnarGeo(4.0),
+  };
+  const trunkMat = new THREE.MeshStandardMaterial({
+    color: TREE_TRUNK_COLOR, roughness: 0.95, metalness: 0, flatShading: true,
+  });
+  // Foliage colour is set per instance via setColorAt — base white so
+  // the instance tint applies cleanly.
+  const foliageMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff, roughness: 0.85, metalness: 0, flatShading: true,
+  });
+
+  // Group trees by type so each type gets ONE pair of InstancedMeshes
+  // (trunk + foliage).
+  const byType = { A: [], B: [], C: [], D: [], E: [] };
+  for (const t of TREE_POSITIONS) {
+    if (byType[t.type]) byType[t.type].push(t);
+  }
+
+  const matrix = new THREE.Matrix4();
+  const pos    = new THREE.Vector3();
+  const quat   = new THREE.Quaternion();
+  const scl    = new THREE.Vector3();
+  const up     = new THREE.Vector3(0, 1, 0);
+  const color  = new THREE.Color();
+
+  for (const [typeKey, trees] of Object.entries(byType)) {
+    if (!trees.length) continue;
+    const { trunkGeo, foliageGeo } = geos[typeKey];
+
+    const trunkInst   = new THREE.InstancedMesh(trunkGeo,   trunkMat,   trees.length);
+    const foliageInst = new THREE.InstancedMesh(foliageGeo, foliageMat, trees.length);
+    trunkInst.castShadow   = true;
+    trunkInst.receiveShadow = false;
+    foliageInst.castShadow = true;
+    foliageInst.receiveShadow = false;
+
+    for (let i = 0; i < trees.length; i++) {
+      const t = trees[i];
+      const scaleVar = (t.s ?? 1) * (0.94 + Math.random() * 0.12);
+      const rotVar   = (t.r ?? 0) + (Math.random() - 0.5) * 0.4;
+      pos.set(t.x - planCenter.x, TREE_BASE_Y, t.z - planCenter.z);
+      quat.setFromAxisAngle(up, rotVar);
+      scl.set(scaleVar, scaleVar, scaleVar);
+      matrix.compose(pos, quat, scl);
+      trunkInst.setMatrixAt(i, matrix);
+      foliageInst.setMatrixAt(i, matrix);
+
+      color.set(TREE_LEAF_COLORS[Math.floor(Math.random() * TREE_LEAF_COLORS.length)]);
+      foliageInst.setColorAt(i, color);
+    }
+    trunkInst.instanceMatrix.needsUpdate = true;
+    foliageInst.instanceMatrix.needsUpdate = true;
+    if (foliageInst.instanceColor) foliageInst.instanceColor.needsUpdate = true;
+
+    root.add(trunkInst);
+    root.add(foliageInst);
+  }
 }
 
 function buildBuildingPlatform(room) {
