@@ -66,6 +66,19 @@ function applyFloorLayout() {
     group.userData.targetY = y;
     y += gap;
   }
+  // Roof + interior toggle: ground-floor rooms render their CLOSED
+  // variant (walls cap + roof) in All / First-Floor views, and swap
+  // to the OPEN variant (open-top walls + interior props) only when
+  // the user explicitly views the Ground Floor on its own.
+  const showOpen = activeFloor === 1;
+  const f1 = floorGroups.get(1);
+  if (f1) {
+    f1.traverse((obj) => {
+      const v = obj.userData?.groundVariant;
+      if (v === "closed") obj.visible = !showOpen;
+      else if (v === "open") obj.visible = showOpen;
+    });
+  }
   reframeCamera();
 }
 

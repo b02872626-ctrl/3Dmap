@@ -1879,6 +1879,13 @@ const lpDoorMat = new THREE.MeshStandardMaterial({
   flatShading: true, side: THREE.DoubleSide,
 });
 
+// Warm glowing orb used by the door-side wall sconces.
+const sconceOrbMat = new THREE.MeshStandardMaterial({
+  color: 0xfff1c0, roughness: 0.4, metalness: 0.05,
+  emissive: 0xffc870, emissiveIntensity: 1.6,
+  flatShading: true,
+});
+
 function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom = []) {
   const group = new THREE.Group();
   const cat = CATEGORIES[room.category] || CATEGORIES.amenity;
@@ -1928,11 +1935,13 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   // adapts to whatever shape the room has.
   const isFloor1 = room.floor === 1;
   const hasFloor2Above = isFloor1 && floor1WithFloor2.has(room.id);
-  // Ground-floor (room.floor === 1) rooms render with no roof and no
-  // wall top cap so the room interior is visible from above — per the
-  // user's "remove the top part of all rooms on the [ground] floor".
-  const exposedTop = isFloor1;
-  const isStandaloneRoofed = !hasFloor2Above && !exposedTop;
+  // Roofs come back on when the user toggles "All" or "First Floor".
+  // Only when the user explicitly views the Ground Floor do we drop
+  // the roof / wall cap and expose interiors. For floor-1 rooms we
+  // build BOTH variants and toggle them in main.js applyFloorLayout
+  // via userData.groundVariant.
+  const buildBothVariants = isFloor1;
+  const isStandaloneRoofed = !hasFloor2Above;
 
   // --- Foundation plinth (slight step at the base) ---
   const foundationPoly = offsetPolygonOutward(polygonLocal, LP_FOUNDATION_OUT);
@@ -1942,36 +1951,41 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   foundation.receiveShadow = true;
   group.add(foundation);
 
-  // --- Walls (closed cream extrusion, or open-top for ground-floor
-  // rooms so the interior is exposed when viewed from above) ---
+  // --- Walls ---
   const wallsBaseY = SITUM_BLOCK_LIFT + LP_FOUNDATION_H;
   const wallHeight = LP_WALL_HEIGHT_T;
-  let walls;
-  if (exposedTop) {
-    // buildOpenTopExtrusion emits only the side faces (no top/bottom
-    // cap) and uses absolute Y in its vertices — no position.y needed.
-    walls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
-  } else {
-    walls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
-    walls.position.y = wallsBaseY + wallHeight;
+
+  // Closed-top walls — used in All / Floor-2 views.
+  const closedWalls = buildExtrudedPolygon(polygonLocal, wallHeight, lpWallMat);
+  closedWalls.position.y = wallsBaseY + wallHeight;
+  closedWalls.castShadow = true;
+  closedWalls.receiveShadow = true;
+  if (buildBothVariants) closedWalls.userData.groundVariant = "closed";
+  group.add(closedWalls);
+
+  // Open-top walls — used only when the user toggles the Ground Floor.
+  // Built once and hidden; the floor switcher swaps visibility.
+  let openWalls = null;
+  if (buildBothVariants) {
+    openWalls = buildOpenTopExtrusion(polygonLocal, wallsBaseY, wallHeight, lpWallMatOpenTop);
+    openWalls.castShadow = true;
+    openWalls.receiveShadow = true;
+    openWalls.userData.groundVariant = "open";
+    openWalls.visible = false;
+    group.add(openWalls);
   }
-  walls.castShadow = true;
-  walls.receiveShadow = true;
-  group.add(walls);
 
   // --- Red hip roof on top (skipped for floor-1 rooms that have a
-  // floor-2 block stacked on them — the upper storey IS their roof,
-  // and skipped for any room whose top is exposed) ---
+  // floor-2 block stacked on them — the upper storey IS their roof) ---
   let roof = null;
   if (isStandaloneRoofed) {
     // No outward offset — overhang at acute U-shape corners would spike.
     roof = buildLowPolyRoof(polygonLocal, wallsBaseY + wallHeight, LP_ROOF_RISE);
     if (roof) {
       roof.castShadow = true;
+      if (buildBothVariants) roof.userData.groundVariant = "closed";
       group.add(roof);
-      // Dark trim line along the eave + hip ridges (EdgesGeometry picks
-      // up every triangle seam, which on a triangle-fan hip roof = the
-      // perimeter + the ridges to the apex).
+      // Dark trim line along the eave + hip ridges.
       const ridges = new THREE.LineSegments(
         new THREE.EdgesGeometry(roof.geometry, 12),
         new THREE.LineBasicMaterial({
@@ -1979,7 +1993,36 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
         }),
       );
       ridges.position.copy(roof.position);
+      if (buildBothVariants) ridges.userData.groundVariant = "closed";
       group.add(ridges);
+
+      // --- Decorative finial at the roof apex ---
+      // Compute the polygon centroid in local plan-centred coords —
+      // that's where buildLowPolyRoof puts the hip apex.
+      let fcx = 0, fcz = 0;
+      for (const [x, z] of polygonLocal) { fcx += x; fcz += z; }
+      fcx /= polygonLocal.length;
+      fcz /= polygonLocal.length;
+      const finialBaseY = wallsBaseY + wallHeight + LP_ROOF_RISE;
+      const finialGroup = new THREE.Group();
+      // Tapered base spike
+      const spike = new THREE.Mesh(
+        new THREE.ConeGeometry(0.08, 0.32, 8),
+        lpOrnamentDark,
+      );
+      spike.position.set(fcx, finialBaseY + 0.16, fcz);
+      spike.castShadow = true;
+      finialGroup.add(spike);
+      // Brass orb on top
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.07, 10, 8),
+        lpOrnamentGold,
+      );
+      orb.position.set(fcx, finialBaseY + 0.40, fcz);
+      orb.castShadow = true;
+      finialGroup.add(orb);
+      if (buildBothVariants) finialGroup.userData.groundVariant = "closed";
+      group.add(finialGroup);
     }
   }
 
@@ -1999,18 +2042,24 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
   addBalconyDetails(group, room, polygonLocal, wallsBaseY, wallHeight,
                     sharedEdges, doorsForRoom);
 
-  // --- Museum-style interiors — visible when the top is open. ---
-  if (exposedTop) {
-    addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
+  // --- Museum-style interiors — wrapped in a group that's only
+  //     visible when the open-top variant is active. ---
+  if (buildBothVariants) {
+    const interiorGroup = new THREE.Group();
+    interiorGroup.userData.groundVariant = "open";
+    interiorGroup.visible = false;
+    addAbaJifarRoomInteriors(interiorGroup, room, polygonLocal, sharedEdges,
                              wallsBaseY, wallHeight);
+    group.add(interiorGroup);
   }
 
   // --- Silhouette outline on the walls ---
   const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(walls.geometry, 1),
+    new THREE.EdgesGeometry(closedWalls.geometry, 1),
     new THREE.LineBasicMaterial({ color: LP_TRIM_COLOR, transparent: true, opacity: 0.55 }),
   );
-  edges.position.copy(walls.position);
+  edges.position.copy(closedWalls.position);
+  if (buildBothVariants) edges.userData.groundVariant = "closed";
   group.add(edges);
 
   group.userData = {
@@ -2019,8 +2068,8 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
     room,
     baseColor: baseColor.clone(),
     originalEmissive: new THREE.Color(0, 0, 0),
-    tile: walls,
-    highlightTargets: roof ? [walls, roof] : [walls],
+    tile: closedWalls,
+    highlightTargets: roof ? [closedWalls, roof] : [closedWalls],
   };
   return group;
 }
@@ -2640,6 +2689,22 @@ function buildLowPolyWindows(group, room, polygonLocal, wallsBaseY, wallHeight, 
       }
       if (nearDoor) continue;
       group.add(buildWindowPanel(wx, windowY, wz, wallAngle));
+
+      // --- Dark wooden shutters flanking the window ---
+      const SHUTTER_W = 0.14;
+      const SHUTTER_H = LP_WINDOW_H + 0.04;
+      const shutterOffset = LP_WINDOW_W / 2 + SHUTTER_W / 2 + 0.02;
+      for (const side of [-1, 1]) {
+        const sx = wx + ux * shutterOffset * side;
+        const sz = wz + uz * shutterOffset * side;
+        const shutter = new THREE.Mesh(
+          new THREE.PlaneGeometry(SHUTTER_W, SHUTTER_H),
+          lpWindowFrameMat,
+        );
+        shutter.position.set(sx, windowY, sz);
+        shutter.rotation.y = wallAngle;
+        group.add(shutter);
+      }
     }
   }
 }
@@ -2717,6 +2782,34 @@ function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
     );
     lintel.rotation.y = wallAngle;
     group.add(lintel);
+
+    // --- Wall sconces flanking the door — small dark mounts with a
+    //     warm glowing orb. Project slightly outward so the orb sits
+    //     proud of the wall plane.
+    const SCONCE_OFFSET = LP_DOOR_W / 2 + 0.18;
+    const SCONCE_Y = doorY + LP_DOOR_H / 2 - 0.05;
+    for (const side of [-1, 1]) {
+      const spx = ax + ux * (bestT * edgeLen) + ux * SCONCE_OFFSET * side + nx * 0.10;
+      const spz = az + uz * (bestT * edgeLen) + uz * SCONCE_OFFSET * side + nz * 0.10;
+      // Dark wall plate
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.10, 0.18, 0.05),
+        lpFoundationMat,
+      );
+      plate.position.set(spx, SCONCE_Y, spz);
+      plate.rotation.y = wallAngle;
+      plate.castShadow = true;
+      group.add(plate);
+      // Warm glowing orb — small sphere with emissive amber.
+      const orbX = spx + nx * 0.08;
+      const orbZ = spz + nz * 0.08;
+      const orb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 10, 8),
+        sconceOrbMat,
+      );
+      orb.position.set(orbX, SCONCE_Y, orbZ);
+      group.add(orb);
+    }
   }
 }
 
