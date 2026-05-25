@@ -128,6 +128,11 @@ export function buildFloors() {
 
     // Outer-lawn meandering pavement disabled — re-enable with
     // addOuterLawnPavement(root) once a target location is confirmed.
+
+    // Lamp posts, entrance gate, benches, flagpoles, hedges, flowering
+    // shrubs and signage posts — see addExteriorDetails for the
+    // breakdown. Wrapped in its own try/catch internally per builder.
+    addExteriorDetails(root);
   }
 
   for (const floor of FLOORS) {
@@ -1885,6 +1890,13 @@ const sconceOrbMat = new THREE.MeshStandardMaterial({
   emissive: 0xffc870, emissiveIntensity: 1.6,
   flatShading: true,
 });
+// Terracotta urn + dark-green shrub used by the door-side planters.
+const planterUrnMat = new THREE.MeshStandardMaterial({
+  color: 0xa66a48, roughness: 0.92, metalness: 0, flatShading: true,
+});
+const planterShrubMat = new THREE.MeshStandardMaterial({
+  color: 0x4a7634, roughness: 0.90, metalness: 0, flatShading: true,
+});
 
 function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom = []) {
   const group = new THREE.Group();
@@ -2012,6 +2024,33 @@ function buildSitumRoomBlock(room, sharedEdges, floor1WithFloor2, doorsForRoom =
       orb.position.set(fcx, finialBaseY + 0.40, fcz);
       orb.castShadow = true;
       liftableParent.add(orb);
+
+      // --- Eave brackets: small triangular wood corbels at each
+      //     polygon vertex, sitting just under the roof and projecting
+      //     slightly outward. Carved-look traditional Ethiopian detail.
+      const bracketY = wallsBaseY + wallHeight - 0.05;
+      for (let bi = 0; bi < polygonLocal.length; bi++) {
+        const [vx, vz] = polygonLocal[bi];
+        // Outward direction from polygon centroid for this vertex.
+        const dx = vx - fcx, dz = vz - fcz;
+        const dlen = Math.hypot(dx, dz);
+        if (dlen < 0.01) continue;
+        const onx = dx / dlen, onz = dz / dlen;
+        const bx = vx + onx * 0.08;
+        const bz = vz + onz * 0.08;
+        const bracket = new THREE.Mesh(
+          new THREE.ConeGeometry(0.10, 0.30, 4),
+          lpFoundationMat,
+        );
+        // ConeGeometry's apex points +Y by default. Rotate so the
+        // apex points DOWNWARD (looks like a corbel hanging under the
+        // eave), then yaw to face outward.
+        bracket.rotation.x = Math.PI;
+        bracket.rotation.y = Math.atan2(onx, onz);
+        bracket.position.set(bx, bracketY, bz);
+        bracket.castShadow = true;
+        liftableParent.add(bracket);
+      }
     }
   }
 
@@ -2804,6 +2843,33 @@ function buildLowPolyDoors(group, polygonLocal, wallsBaseY, doors) {
       orb.position.set(orbX, SCONCE_Y, orbZ);
       group.add(orb);
     }
+
+    // --- Stone planters flanking the door — terracotta urn + green
+    //     shrub on top, projecting outward from the wall onto the
+    //     veranda. Skip if the door sits very close to the polygon
+    //     edge endpoints (corner — no room for the planter).
+    const PLANTER_OFFSET = LP_DOOR_W / 2 + 0.55;
+    if (bestT * edgeLen > 1.0 && (1 - bestT) * edgeLen > 1.0) {
+      for (const side of [-1, 1]) {
+        const ppx = ax + ux * (bestT * edgeLen) + ux * PLANTER_OFFSET * side + nx * 0.55;
+        const ppz = az + uz * (bestT * edgeLen) + uz * PLANTER_OFFSET * side + nz * 0.55;
+        const urn = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.18, 0.14, 0.30, 10),
+          planterUrnMat,
+        );
+        urn.position.set(ppx, wallsBaseY + 0.15, ppz);
+        urn.castShadow = true;
+        urn.receiveShadow = true;
+        group.add(urn);
+        const shrub = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(0.20, 0),
+          planterShrubMat,
+        );
+        shrub.position.set(ppx, wallsBaseY + 0.42, ppz);
+        shrub.castShadow = true;
+        group.add(shrub);
+      }
+    }
   }
 }
 
@@ -3570,6 +3636,446 @@ const OUTER_PAVE_EAST_PATH = [
 function addOuterLawnPavement(root) {
   const path = buildOuterPavementPath(OUTER_PAVE_EAST_PATH);
   if (path) root.add(path);
+}
+
+// ====================================================================
+//  EXTERIOR ARCHITECTURAL DETAILS
+//  ------------------------------------------------------------------
+//  Scene-level additions that enrich the outdoor environment:
+//    1. Lamp posts along the plaza perimeter and main paths
+//    2. South-entrance compound gate
+//    3. Stone benches along the plaza
+//    4. Flagpoles at major buildings (Ethiopian tricolor)
+//    6. Hedge strips along the primary corridor
+//    8. Flowering shrubs scattered on the outer lawn
+//    9. Signage posts at the major waypoint intersections
+//  (Planters and roof brackets are added per-room from inside
+//   buildLowPolyDoors and the roof block.)
+// ====================================================================
+
+// --- Shared materials ---
+const extPostMat = new THREE.MeshStandardMaterial({
+  color: 0x3b2418, roughness: 0.85, metalness: 0, flatShading: true,
+});
+const extLampGlobeMat = new THREE.MeshStandardMaterial({
+  color: 0xfff1c4, roughness: 0.30, metalness: 0,
+  emissive: 0xffc870, emissiveIntensity: 1.6, flatShading: true,
+});
+const extStoneMat = new THREE.MeshStandardMaterial({
+  color: 0xc8c0ad, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const extHedgeMat = new THREE.MeshStandardMaterial({
+  color: 0x3d6a30, roughness: 0.95, metalness: 0, flatShading: true,
+});
+const extShrubMats = [
+  new THREE.MeshStandardMaterial({ color: 0xc94a3e, roughness: 0.85, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0xe0b440, roughness: 0.85, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0xd07e9a, roughness: 0.85, flatShading: true }),
+];
+const extFlagGreenMat = new THREE.MeshStandardMaterial({
+  color: 0x148f3d, roughness: 0.88, flatShading: true, side: THREE.DoubleSide,
+});
+const extFlagYellowMat = new THREE.MeshStandardMaterial({
+  color: 0xf0c00a, roughness: 0.88, flatShading: true, side: THREE.DoubleSide,
+});
+const extFlagRedMat = new THREE.MeshStandardMaterial({
+  color: 0xc4172e, roughness: 0.88, flatShading: true, side: THREE.DoubleSide,
+});
+const extSignPostMat = new THREE.MeshStandardMaterial({
+  color: 0x5a3a22, roughness: 0.90, flatShading: true,
+});
+const extSignBoardMat = new THREE.MeshStandardMaterial({
+  color: 0xf3ece0, roughness: 0.85, flatShading: true, side: THREE.DoubleSide,
+});
+const extSignTextMat = new THREE.MeshStandardMaterial({
+  color: 0x2a1c12, roughness: 0.85, flatShading: true, side: THREE.DoubleSide,
+});
+
+// --- Lamp posts ---
+// `xy` is in raw plan coords. Lamp sits on the OUTER plaza top.
+function _buildLampPost(xPlan, zPlan, baseY) {
+  const grp = new THREE.Group();
+  const cx = offsetX(xPlan);
+  const cz = offsetZ(zPlan);
+  // Base block
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(0.22, 0.18, 0.22),
+    extStoneMat,
+  );
+  base.position.set(cx, baseY + 0.09, cz);
+  base.castShadow = true;
+  base.receiveShadow = true;
+  grp.add(base);
+  // Post
+  const POST_H = 2.4;
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045, 0.06, POST_H, 8),
+    extPostMat,
+  );
+  post.position.set(cx, baseY + 0.18 + POST_H / 2, cz);
+  post.castShadow = true;
+  grp.add(post);
+  // Cap below globe
+  const cap = new THREE.Mesh(
+    new THREE.ConeGeometry(0.12, 0.10, 8),
+    extPostMat,
+  );
+  cap.position.set(cx, baseY + 0.18 + POST_H + 0.05, cz);
+  grp.add(cap);
+  // Glowing globe on top
+  const globe = new THREE.Mesh(
+    new THREE.SphereGeometry(0.11, 12, 10),
+    extLampGlobeMat,
+  );
+  globe.position.set(cx, baseY + 0.18 + POST_H + 0.18, cz);
+  grp.add(globe);
+  return grp;
+}
+
+const LAMP_PLAZA_Y = PLATFORM_Y + PLATFORM_H;   // outer plaza top
+
+function addExteriorLampPosts(root) {
+  const positions = [
+    // North edge of plaza (z ≈ -1.2)
+    [ 5, -1.0], [15, -1.0], [25, -1.0], [35, -1.0], [45, -1.0],
+    // South edge (skip the south entrance gap around x≈14-17)
+    [ 5, 37.0], [25, 37.0], [35, 37.0], [45, 37.0],
+    // East edge (x ≈ 47)
+    [47.0,  8], [47.0, 16], [47.0, 24], [47.0, 32],
+    // West edge (x ≈ 4)
+    [ 4.0,  8], [ 4.0, 16], [ 4.0, 24], [ 4.0, 30],
+  ];
+  for (const [x, z] of positions) {
+    root.add(_buildLampPost(x, z, LAMP_PLAZA_Y));
+  }
+}
+
+// --- South-entrance compound gate ---
+function addExteriorEntranceGate(root) {
+  // Wp-main-entrance sits at (14.5, 33). Build the gate ~3 m south
+  // of it at z ≈ 36 so visitors walk through it onto the plaza.
+  const cxPlan = 14.5;
+  const czPlan = 36.2;
+  const cx = offsetX(cxPlan);
+  const cz = offsetZ(czPlan);
+  const baseY = LAMP_PLAZA_Y;
+  // Two stone piers
+  const PIER_W = 0.55;
+  const PIER_H = 2.6;
+  const PIER_SPACING = 3.4;
+  for (const sgn of [-1, 1]) {
+    const pier = new THREE.Mesh(
+      new THREE.BoxGeometry(PIER_W, PIER_H, PIER_W),
+      extStoneMat,
+    );
+    pier.position.set(cx + sgn * (PIER_SPACING / 2), baseY + PIER_H / 2, cz);
+    pier.castShadow = true;
+    pier.receiveShadow = true;
+    root.add(pier);
+    // Cap on top of pier
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(PIER_W + 0.18, 0.14, PIER_W + 0.18),
+      lpFoundationMat,
+    );
+    cap.position.set(cx + sgn * (PIER_SPACING / 2), baseY + PIER_H + 0.07, cz);
+    cap.castShadow = true;
+    root.add(cap);
+  }
+  // Crossbeam between piers
+  const BEAM_W = PIER_SPACING + PIER_W + 0.20;
+  const BEAM_H = 0.45;
+  const beam = new THREE.Mesh(
+    new THREE.BoxGeometry(BEAM_W, BEAM_H, 0.40),
+    lpWallMat,
+  );
+  beam.position.set(cx, baseY + PIER_H + 0.14 + BEAM_H / 2, cz);
+  beam.castShadow = true;
+  root.add(beam);
+  // Decorative dark trim band along the bottom of the beam
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(BEAM_W + 0.02, 0.07, 0.42),
+    lpFoundationMat,
+  );
+  trim.position.set(cx, baseY + PIER_H + 0.14 - 0.035, cz);
+  root.add(trim);
+  // Small finial on top of the beam (orb)
+  const finial = new THREE.Mesh(
+    new THREE.SphereGeometry(0.16, 12, 10),
+    lpOrnamentGold,
+  );
+  finial.position.set(cx, baseY + PIER_H + 0.14 + BEAM_H + 0.16, cz);
+  finial.castShadow = true;
+  root.add(finial);
+}
+
+// --- Stone benches along the plaza ---
+function _buildStoneBench(xPlan, zPlan, yawRad, baseY) {
+  const grp = new THREE.Group();
+  const cx = offsetX(xPlan);
+  const cz = offsetZ(zPlan);
+  // Seat slab
+  const seat = new THREE.Mesh(
+    new THREE.BoxGeometry(1.4, 0.10, 0.40),
+    extStoneMat,
+  );
+  seat.position.set(cx, baseY + 0.42, cz);
+  seat.rotation.y = yawRad;
+  seat.castShadow = true;
+  seat.receiveShadow = true;
+  grp.add(seat);
+  // Two stone supports
+  for (const sgn of [-1, 1]) {
+    const supX = cx + Math.cos(yawRad) * 0.55 * sgn;
+    const supZ = cz - Math.sin(yawRad) * 0.55 * sgn;
+    const support = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.36, 0.32),
+      extStoneMat,
+    );
+    support.position.set(supX, baseY + 0.18, supZ);
+    support.rotation.y = yawRad;
+    support.castShadow = true;
+    grp.add(support);
+  }
+  return grp;
+}
+
+function addExteriorBenches(root) {
+  // Each entry: [x, z, yawRad]. Yaw rotates the bench's long axis.
+  const benches = [
+    // North side of plaza, facing south
+    [10,  0.5,  0],
+    [38,  0.5,  0],
+    // East side, facing west
+    [46,  15,    Math.PI / 2],
+    [46,  28,    Math.PI / 2],
+    // West side, facing east
+    [ 5,  16,   -Math.PI / 2],
+    // South side near main entrance, facing north
+    [25, 36.5, Math.PI],
+    [40, 36.5, Math.PI],
+  ];
+  for (const [x, z, yaw] of benches) {
+    root.add(_buildStoneBench(x, z, yaw, LAMP_PLAZA_Y));
+  }
+}
+
+// --- Flagpoles at major buildings ---
+function _buildFlagpole(xPlan, zPlan, baseY) {
+  const grp = new THREE.Group();
+  const cx = offsetX(xPlan);
+  const cz = offsetZ(zPlan);
+  // Stone base
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.20, 0.18, 10),
+    extStoneMat,
+  );
+  base.position.set(cx, baseY + 0.09, cz);
+  base.castShadow = true;
+  grp.add(base);
+  // Pole
+  const POLE_H = 3.8;
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.035, POLE_H, 8),
+    extPostMat,
+  );
+  pole.position.set(cx, baseY + 0.18 + POLE_H / 2, cz);
+  pole.castShadow = true;
+  grp.add(pole);
+  // Three horizontal flag bands (Ethiopian tricolor: green / yellow / red)
+  const FLAG_W = 0.65;
+  const BAND_H = 0.20;
+  const flagYBase = baseY + 0.18 + POLE_H * 0.62;
+  const bands = [
+    { mat: extFlagGreenMat,  dy:  BAND_H * 1.0 },
+    { mat: extFlagYellowMat, dy:  0 },
+    { mat: extFlagRedMat,    dy: -BAND_H * 1.0 },
+  ];
+  for (const b of bands) {
+    const band = new THREE.Mesh(
+      new THREE.PlaneGeometry(FLAG_W, BAND_H),
+      b.mat,
+    );
+    band.position.set(cx + FLAG_W / 2 + 0.04, flagYBase + b.dy, cz);
+    grp.add(band);
+  }
+  return grp;
+}
+
+function addExteriorFlagpoles(root) {
+  // Plant flagpoles outside the south face of the main buildings.
+  // Coordinates are in raw plan space; the pole stands on the outer
+  // plaza (LAMP_PLAZA_Y) just outside the inner-plaza podium.
+  const poles = [
+    // South of palace block — slightly east of religion-sw corner
+    [10.0, 35.5],
+    // South of central H-building (left side)
+    [22.0, 35.5],
+    // South of central H-building (right side)
+    [30.0, 35.5],
+    // South of the women's room building (east standalone)
+    [42.0, 35.5],
+  ];
+  for (const [x, z] of poles) {
+    root.add(_buildFlagpole(x, z, LAMP_PLAZA_Y));
+  }
+}
+
+// --- Hedge strips along the south spine ---
+// One hedge slab is a long thin box rendered along the (x,z) midline
+// of the strip, oriented by `yaw`.
+function _buildHedgeSlab(x1Plan, z1Plan, x2Plan, z2Plan, baseY) {
+  const ax = offsetX(x1Plan), az = offsetZ(z1Plan);
+  const bx = offsetX(x2Plan), bz = offsetZ(z2Plan);
+  const dx = bx - ax, dz = bz - az;
+  const len = Math.hypot(dx, dz);
+  if (len < 0.4) return null;
+  const yaw = Math.atan2(-dz, dx);
+  const HEDGE_W = 0.45;
+  const HEDGE_H = 0.55;
+  const hedge = new THREE.Mesh(
+    new THREE.BoxGeometry(len, HEDGE_H, HEDGE_W),
+    extHedgeMat,
+  );
+  hedge.position.set((ax + bx) / 2, baseY + HEDGE_H / 2, (az + bz) / 2);
+  hedge.rotation.y = yaw;
+  hedge.castShadow = true;
+  hedge.receiveShadow = true;
+  return hedge;
+}
+
+function addExteriorHedges(root) {
+  // Line the south spine (wp-main-entrance ↔ wp-spine-1 at z=33) with
+  // hedges on the OUTER plaza, slightly south of the path so they
+  // don't clip the staircases. Y matches outer plaza.
+  const baseY = LAMP_PLAZA_Y;
+  const hedges = [
+    // South strip flanking the south corridor — one band running
+    // along the path's south side.
+    [ 7.0, 36.0, 13.0, 36.0],
+    [21.0, 36.0, 32.0, 36.0],
+    [33.5, 36.0, 45.0, 36.0],
+    // North strip (just south of the religion-sw → main-entrance edge)
+    [ 7.0, -1.2, 14.0, -1.2],
+    [16.0, -1.2, 44.0, -1.2],
+  ];
+  for (const [x1, z1, x2, z2] of hedges) {
+    const h = _buildHedgeSlab(x1, z1, x2, z2, baseY);
+    if (h) root.add(h);
+  }
+}
+
+// --- Flowering shrubs scattered on the outer lawn ---
+function _buildFloweringShrub(worldX, worldZ, matIndex) {
+  const grp = new THREE.Group();
+  // Dark wooden stem
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.05, 0.20, 6),
+    extPostMat,
+  );
+  stem.position.set(worldX, OUTER_PAVE_BASE_Y + 0.10, worldZ);
+  grp.add(stem);
+  // Colourful low-poly bloom
+  const bloom = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.32, 0),
+    extShrubMats[matIndex % extShrubMats.length],
+  );
+  bloom.position.set(worldX, OUTER_PAVE_BASE_Y + 0.36, worldZ);
+  bloom.rotation.y = Math.random() * Math.PI;
+  bloom.castShadow = true;
+  grp.add(bloom);
+  return grp;
+}
+
+function addExteriorFloweringShrubs(root) {
+  // Positions in WORLD coords (post planCenter offset) — scattered on
+  // the outer lawn (outside SITE_PLAZA's world bounds of roughly
+  // x:[-32.7..12.3] z:[-26.9..13.1]).
+  const SHRUBS = [
+    // East lawn
+    [ 20, -10, 0], [ 26,  -2, 1], [ 30,   8, 2], [ 38, -14, 0],
+    [ 42,   2, 1], [ 48,  -8, 2],
+    // South lawn
+    [-12,  18, 0], [  6,  22, 2], [-22,  19, 1], [ 16,  21, 0],
+    // North lawn
+    [-14, -30, 1], [ 10, -34, 2], [-26, -34, 0],
+    // West lawn
+    [-40,  -6, 2], [-46,  10, 0],
+  ];
+  for (const [x, z, mi] of SHRUBS) {
+    root.add(_buildFloweringShrub(x, z, mi));
+  }
+}
+
+// --- Signage posts at the major waypoint intersections ---
+function _buildSignagePost(xPlan, zPlan, baseY, arrowAngles) {
+  const grp = new THREE.Group();
+  const cx = offsetX(xPlan);
+  const cz = offsetZ(zPlan);
+  // Wood post
+  const POST_H = 1.6;
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.035, 0.045, POST_H, 8),
+    extSignPostMat,
+  );
+  post.position.set(cx, baseY + POST_H / 2, cz);
+  post.castShadow = true;
+  grp.add(post);
+  // Each arrow board: small flat plank pointing in `angle` direction.
+  for (let i = 0; i < arrowAngles.length; i++) {
+    const angle = arrowAngles[i];
+    const PLANK_W = 0.60;
+    const PLANK_H = 0.16;
+    const planeY = baseY + POST_H - 0.10 - i * (PLANK_H + 0.06);
+    const offX = Math.sin(angle) * (PLANK_W / 2 - 0.04);
+    const offZ = Math.cos(angle) * (PLANK_W / 2 - 0.04);
+    const plank = new THREE.Mesh(
+      new THREE.PlaneGeometry(PLANK_W, PLANK_H),
+      extSignBoardMat,
+    );
+    plank.position.set(cx + offX, planeY, cz + offZ);
+    plank.rotation.y = angle + Math.PI / 2;   // face perpendicular to "angle"
+    grp.add(plank);
+    // Dark "text" strip across the plank
+    const strip = new THREE.Mesh(
+      new THREE.PlaneGeometry(PLANK_W * 0.7, PLANK_H * 0.35),
+      extSignTextMat,
+    );
+    strip.position.set(
+      cx + offX + Math.sin(angle + Math.PI / 2) * 0.004,
+      planeY,
+      cz + offZ + Math.cos(angle + Math.PI / 2) * 0.004,
+    );
+    strip.rotation.y = angle + Math.PI / 2;
+    grp.add(strip);
+  }
+  return grp;
+}
+
+function addExteriorSignage(root) {
+  const baseY = PLATFORM_Y + PLATFORM_H + INNER_PLAZA_LIFT;   // on the podium
+  // [xPlan, zPlan, [arrowDirsRad...]]
+  const signs = [
+    // Central hub — arrows roughly N (toward cluster) and S (entrance)
+    [19.5, 19.5, [0,             Math.PI]],
+    // Spine-1 south corner — arrow north (hub) and west (religion)
+    [19.5, 33.0, [-Math.PI / 2,  0]],
+    // Main entrance — arrow north (into compound) and east (spine-1)
+    [14.5, 33.0, [0,             Math.PI / 2]],
+  ];
+  for (const [x, z, arrows] of signs) {
+    root.add(_buildSignagePost(x, z, baseY, arrows));
+  }
+}
+
+// --- Master entry: call from buildFloors ---
+function addExteriorDetails(root) {
+  try { addExteriorLampPosts(root); }       catch (e) { console.error("lamp posts:", e); }
+  try { addExteriorEntranceGate(root); }    catch (e) { console.error("entrance gate:", e); }
+  try { addExteriorBenches(root); }         catch (e) { console.error("benches:", e); }
+  try { addExteriorFlagpoles(root); }       catch (e) { console.error("flagpoles:", e); }
+  try { addExteriorHedges(root); }          catch (e) { console.error("hedges:", e); }
+  try { addExteriorFloweringShrubs(root); } catch (e) { console.error("shrubs:", e); }
+  try { addExteriorSignage(root); }         catch (e) { console.error("signage:", e); }
 }
 
 // One window unit: glass pane + thin wooden frame.
