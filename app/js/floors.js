@@ -126,12 +126,8 @@ export function buildFloors() {
     // Subtle low-poly grass color patches for ground variation.
     if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) addGroundGrassPatches(root);
 
-    // Outer-lawn meandering pavement on the east side.
-    try {
-      addOuterLawnPavement(root);
-    } catch (err) {
-      console.error("addOuterLawnPavement failed:", err);
-    }
+    // Outer-lawn meandering pavement disabled — re-enable with
+    // addOuterLawnPavement(root) once a target location is confirmed.
   }
 
   for (const floor of FLOORS) {
