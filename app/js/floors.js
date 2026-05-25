@@ -1364,48 +1364,34 @@ const TREE_LEAF_COLORS = [
   0x4A7C3E, 0x5CBF4A, 0x6FAE5B, 0x3B6B34, 0x547F43,
 ];
 const TREE_TRUNK_COLOR = 0x5A3A23;
-const TREE_BASE_Y      = -1.55;    // sit on the lower grass plane
+// Trees sit on the raised plaza grass patches, not the lower lawn.
+// Patch top Y = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT = 0.13.
+const TREE_BASE_Y      = PLATFORM_Y + PLATFORM_H + GRASS_PATCH_HEIGHT;
 
-// Hand-defined clusters around the plaza perimeter (raw plan coords).
-// Each entry: { type, x, z, s (scale), r (Y rotation rad) }.
+// All positions are inside the four PLAZA_GRASS_PATCHES polygons,
+// kept a small margin (~0.6 m) inside each patch's edge so trunks
+// don't push into the curb. Each entry: { type, x, z, s, r }.
 const TREE_POSITIONS = [
-  // NW cluster
-  { type: "A", x:  5, z:  -7, s: 1.00, r: 0.3 },
-  { type: "B", x:  9, z: -10, s: 1.00, r: 1.2 },
-  { type: "A", x: 13, z:  -6, s: 1.05, r: 2.1 },
-  // N-center
-  { type: "C", x: 22, z:  -8, s: 1.00, r: 0.5 },
-  { type: "B", x: 27, z: -10, s: 0.95, r: 1.5 },
-  // NE
-  { type: "A", x: 35, z:  -7, s: 1.05, r: 2.0 },
-  { type: "C", x: 41, z:  -9, s: 1.00, r: 0.8 },
-  { type: "D", x: 45, z:  -6, s: 0.90, r: 1.4 },
-  // East
-  { type: "A", x: 53, z:   5, s: 1.00, r: 0.4 },
-  { type: "B", x: 55, z:  12, s: 0.95, r: 1.6 },
-  { type: "C", x: 52, z:  18, s: 1.05, r: 2.3 },
-  // SE
-  { type: "C", x: 54, z:  28, s: 1.00, r: 0.7 },
-  { type: "A", x: 56, z:  35, s: 1.05, r: 1.9 },
-  { type: "D", x: 50, z:  41, s: 0.90, r: 2.5 },
-  // South
-  { type: "C", x: 38, z:  44, s: 1.00, r: 0.6 },
-  { type: "B", x: 30, z:  47, s: 0.95, r: 1.4 },
-  { type: "C", x: 22, z:  45, s: 1.00, r: 2.2 },
-  { type: "D", x:  6, z:  46, s: 0.90, r: 0.9 },
-  // SW
-  { type: "A", x:  0, z:  43, s: 1.00, r: 1.7 },
-  { type: "B", x: -2, z:  35, s: 0.95, r: 2.4 },
-  { type: "D", x: -4, z:  28, s: 0.90, r: 0.3 },
-  // West
-  { type: "C", x: -6, z:  20, s: 1.05, r: 1.1 },
-  { type: "A", x: -3, z:  12, s: 1.00, r: 2.0 },
-  { type: "B", x: -8, z:   5, s: 0.95, r: 0.7 },
-  // Columnar accents flanking the south entrance / node 1 approach
-  // (node 1 is at z=33; flank well to the south on the grass)
-  { type: "E", x:  9, z:  41, s: 1.00, r: 0 },
-  { type: "E", x: 20, z:  41, s: 1.00, r: 0 },
+  // ----- Patch 1: NW open area (L-shape, bbox 8-21 × 2-12.5) -----
+  { type: "C", x: 11, z:  4.5, s: 1.00, r: 0.4 },
+  { type: "B", x: 16, z:  4.5, s: 0.95, r: 1.6 },
+  { type: "D", x: 10, z:  8.0, s: 0.95, r: 0.9 },
+  { type: "D", x: 14, z: 11.0, s: 0.90, r: 2.1 },
+
+  // ----- Patch 2: East strip (34-46.5 × 11.5-31) -----
+  { type: "A", x: 38, z: 14,   s: 1.00, r: 0.3 },
+  { type: "B", x: 43, z: 15,   s: 0.95, r: 1.5 },
+  { type: "C", x: 37, z: 20,   s: 1.00, r: 2.0 },
+  { type: "D", x: 43, z: 21,   s: 0.95, r: 0.7 },
+  { type: "B", x: 38, z: 26,   s: 1.00, r: 1.9 },
+  { type: "C", x: 44, z: 28,   s: 1.00, r: 2.4 },
+
+  // ----- Patch 4: SW patch (4.5-8 × 28-36.5) -----
+  { type: "D", x:  6, z: 30.5, s: 0.95, r: 0.6 },
+  { type: "E", x:  6, z: 34.5, s: 0.95, r: 0   },
 ];
+// Patch 3 (south strip, 18-46.5 × 34.5-36.5) is only ~2 m wide —
+// trees would overflow the curb. Intentionally left empty.
 
 // CylinderGeometry / ConeGeometry are indexed; IcosahedronGeometry is
 // non-indexed. BufferGeometryUtils.mergeGeometries refuses to mix
