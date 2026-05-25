@@ -413,7 +413,7 @@ function buildSitumFloor(group, floor, roomGroups) {
 const PATH_COLOR        = 0xc8b893;   // primary spine — warm flagstone
 const PATH_COLOR_LIGHT  = 0xd9cba8;   // secondary connector — paler stone
 const PATH_THICK        = 0.10;
-const PATH_LIFT         = 0.12;
+const PATH_LIFT         = 0.25;
 const PATH_OUTLINE      = 0x6e6249;   // mortar / shadow line between tiles
 const WAYPOINT_COLOR    = 0xffd400;
 const MAJOR_STOP_COLOR  = 0xff6b3d;   // orange — stands out against stone
@@ -666,7 +666,7 @@ function buildLamppost(cx, cz_y, cz) {
 }
 
 const SITUM_BLOCK_HEIGHT = 1.6;   // height of each room's 3D block (fallback path only)
-const SITUM_BLOCK_LIFT   = 0.05;  // sit just above the floor plane
+const SITUM_BLOCK_LIFT   = 0.20;  // sit on top of the inner plaza (outer plaza 0.07 + INNER_PLAZA_LIFT 0.13)
 const SITUM_TILE_HEIGHT  = 0.12;  // colored floor tile thickness
 const SITUM_WALL_HEIGHT  = 1.85;  // beige perimeter walls
 const SITUM_WALL_THICK   = 0.22;
@@ -906,7 +906,7 @@ function buildSitePlaza() {
   const d = SITE_PLAZA.maxZ - SITE_PLAZA.minZ;
   const cx = offsetX((SITE_PLAZA.minX + SITE_PLAZA.maxX) / 2);
   const cz = offsetZ((SITE_PLAZA.minZ + SITE_PLAZA.maxZ) / 2);
-  const topY = PLATFORM_Y + PLATFORM_H;            // 0.07 — buildings still sit here
+  const topY = PLATFORM_Y + PLATFORM_H;            // 0.07
   const plaza = new THREE.Mesh(
     new THREE.BoxGeometry(w, SITE_PLAZA_THICK, d),
     terrainPlazaMat,
@@ -915,6 +915,52 @@ function buildSitePlaza() {
   plaza.castShadow = true;
   plaza.receiveShadow = true;
   return plaza;
+}
+
+// Raised "inner plaza" that frames the building section like a
+// podium. Footprint = SITE_PLAZA rectangle minus the grass-patch
+// polygons (so the lawns appear as sunken openings inside the
+// raised area). Buildings + paths sit on this inner plaza top —
+// SITUM_BLOCK_LIFT and PATH_LIFT have been bumped to match.
+const INNER_PLAZA_LIFT = 0.13;
+const innerPlazaMat = new THREE.MeshStandardMaterial({
+  color: 0xe1cda7, roughness: 0.92, metalness: 0, flatShading: true,
+});
+
+function buildInnerPlaza() {
+  const shape = new THREE.Shape();
+  const minX = offsetX(SITE_PLAZA.minX);
+  const maxX = offsetX(SITE_PLAZA.maxX);
+  const minZ = offsetZ(SITE_PLAZA.minZ);
+  const maxZ = offsetZ(SITE_PLAZA.maxZ);
+  shape.moveTo(minX, minZ);
+  shape.lineTo(maxX, minZ);
+  shape.lineTo(maxX, maxZ);
+  shape.lineTo(minX, maxZ);
+  shape.lineTo(minX, minZ);
+  // Punch the grass patches out so the lawn pokes through at its
+  // (lower) level.
+  for (const patch of PLAZA_GRASS_PATCHES) {
+    if (!Array.isArray(patch) || patch.length < 3) continue;
+    const hole = new THREE.Path();
+    for (let i = 0; i < patch.length; i++) {
+      const [x, z] = patch[i];
+      const lx = offsetX(x);
+      const lz = offsetZ(z);
+      if (i === 0) hole.moveTo(lx, lz); else hole.lineTo(lx, lz);
+    }
+    shape.holes.push(hole);
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: INNER_PLAZA_LIFT, bevelEnabled: false,
+  });
+  geo.rotateX(Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, innerPlazaMat);
+  // Bottom flush at outer-plaza top, top at outer-plaza top + lift.
+  mesh.position.y = PLATFORM_Y + PLATFORM_H + INNER_PLAZA_LIFT;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 // Border kept between every grass patch and the outer edge of the
@@ -1138,9 +1184,11 @@ function addGrassBlades(group) {
 
 function addOutdoorTerrain(group) {
   // Start with the big site plaza (one rectangle covering the entire
-  // compound), then layer per-building platforms + grass cut-outs +
-  // curbs + instanced grass blades + details on top.
+  // compound), then add the raised inner plaza around the buildings,
+  // then layer per-building platforms + grass cut-outs + curbs +
+  // instanced grass blades + details on top.
   group.add(buildSitePlaza());
+  group.add(buildInnerPlaza());
   addPlazaGrassPatches(group);
   addGrassPatchCurbs(group);
   addGrassBlades(group);
