@@ -377,12 +377,10 @@ function buildSitumFloor(group, floor, roomGroups) {
     group.add(rg);
     roomGroups.push(rg);
 
-    // Floating numbered "stop" badge above the room — turns every room
-    // into a visible point on the visitor tour (ported from the
-    // museum's 2D guide prototype). Sprite faces the camera so the
-    // number is legible from any angle.
-    const badge = buildRoomStopBadge(room);
-    if (badge) group.add(badge);
+    // Floating numbered stop badges disabled at user request — uncomment
+    // to bring them back.
+    // const badge = buildRoomStopBadge(room);
+    // if (badge) group.add(badge);
   }
 
   // Outdoor walking network — ground floor only.
@@ -639,20 +637,10 @@ function buildWaypointDot(wp) {
   ring.position.set(cx, PATH_LIFT + height + 0.012, cz);
   grp.add(ring);
 
-  // Major stops carry a number sprite + a low-poly lamppost so the
-  // intersection reads as a real public square / decision plaza.
+  // Major stop number sprite disabled at user request — the orange
+  // disc + ring + lamppost stay so the intersection is still a
+  // visible decision point, just without the floating number.
   if (isMajor && wp.stop !== undefined) {
-    const tex = makeLabelTexture(String(wp.stop));
-    const aspect = tex.image.width / tex.image.height;
-    const h = 0.7;
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, depthTest: false, depthWrite: false,
-    }));
-    sprite.scale.set(h * aspect, h, 1);
-    sprite.position.set(cx, PATH_LIFT + height + 0.45, cz);
-    sprite.renderOrder = 1001;
-    grp.add(sprite);
-
     // Lamppost — black pole + glowing head, 4-sided low-poly look.
     grp.add(buildLamppost(cx, PATH_LIFT, cz));
   }
