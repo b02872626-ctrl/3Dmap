@@ -650,11 +650,12 @@ function buildWaypointDot(wp) {
   return grp;
 }
 
-// Floating numbered "stop" badge centred over a room's footprint —
-// renders the room ID as a pill-shaped sprite so visitors can spot
-// every room on the curated visitor tour. Sprites always face the
-// camera and skip depth test so they read on any iso angle.
-const ROOM_BADGE_Y = 4.5; // local floor-group Y, well above the roof
+// Numbered "stop" badge sitting INSIDE the room, hovering ~0.4 m
+// above the room floor (the foundation top sits at local Y ≈ 1.13,
+// so 1.55 puts the badge just above the floor in the middle of the
+// room). depthTest:false keeps the number readable even when the
+// roof is on — the pin reads through the walls like a 2D map pin.
+const ROOM_BADGE_Y = 1.55;
 function buildRoomStopBadge(room) {
   if (!room) return null;
   const cx = offsetX(room.footprint.x + room.footprint.w / 2);
@@ -662,7 +663,7 @@ function buildRoomStopBadge(room) {
 
   const tex = makeLabelTexture(String(room.id));
   const aspect = tex.image.width / tex.image.height;
-  const h = 0.55;
+  const h = 0.45;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex,
     transparent: true,
