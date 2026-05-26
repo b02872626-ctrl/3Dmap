@@ -376,6 +376,13 @@ function buildSitumFloor(group, floor, roomGroups) {
     );
     group.add(rg);
     roomGroups.push(rg);
+
+    // Floating numbered "stop" badge above the room — turns every room
+    // into a visible point on the visitor tour (ported from the
+    // museum's 2D guide prototype). Sprite faces the camera so the
+    // number is legible from any angle.
+    const badge = buildRoomStopBadge(room);
+    if (badge) group.add(badge);
   }
 
   // Outdoor walking network — ground floor only.
@@ -650,6 +657,33 @@ function buildWaypointDot(wp) {
     grp.add(buildLamppost(cx, PATH_LIFT, cz));
   }
   return grp;
+}
+
+// Floating numbered "stop" badge centred over a room's footprint —
+// renders the room ID as a pill-shaped sprite so visitors can spot
+// every room on the curated visitor tour. Sprites always face the
+// camera and skip depth test so they read on any iso angle.
+const ROOM_BADGE_Y = 4.5; // local floor-group Y, well above the roof
+function buildRoomStopBadge(room) {
+  if (!room) return null;
+  const cx = offsetX(room.footprint.x + room.footprint.w / 2);
+  const cz = offsetZ(room.footprint.z + room.footprint.d / 2);
+
+  const tex = makeLabelTexture(String(room.id));
+  const aspect = tex.image.width / tex.image.height;
+  const h = 0.55;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  }));
+  sprite.scale.set(h * aspect, h, 1);
+  sprite.position.set(cx, ROOM_BADGE_Y, cz);
+  sprite.renderOrder = 1002;
+  sprite.userData.kind  = "roomStop";
+  sprite.userData.roomId = room.id;
+  return sprite;
 }
 
 function buildLamppost(cx, cz_y, cz) {

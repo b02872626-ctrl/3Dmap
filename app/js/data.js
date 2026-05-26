@@ -271,6 +271,172 @@ for (const r of ABA_ROOMS) {
   if (poly) r.polygon = poly;
 }
 
+// Trilingual room content (English / Amharic / Afaan Oromo) ported from
+// the museum's interactive guide prototype. Used by main.js to populate
+// the info panel narrative and the search index. Each entry has:
+//   subtype     → short type / category label per language
+//   description → 1-2 sentence narrative shown under the room title
+// Room 20 (Banquet Hall) is intentionally left out — the room block
+// was removed from this build.
+const ABA_ROOM_CONTENT = {
+  1: {
+    subtype: { en: "Visitor Start", am: "የጎብኚ መጀመሪያ", or: "Jalqaba Daawwattootaa" },
+    description: {
+      en: "Start the museum journey here. Visitors can choose a language, view room information, and follow the museum route.",
+      am: "የሙዚየሙን ጉብኝት ከዚህ ይጀምሩ። ቋንቋ ይምረጡ፣ የክፍሎቹን መረጃ ይመልከቱ፣ እና የመንገዱን ምልክቶች ይከተሉ።",
+      or: "Daawwannaa muuziyeemii as irraa jalqabi. Afaan filadhu, odeeffannoo kutaa ilaali, daandii tuqaa hordofi.",
+    },
+  },
+  2: {
+    subtype: { en: "History Gallery", am: "የታሪክ ክፍል", or: "Kutaa Seenaa" },
+    description: {
+      en: "This section introduces the Geda system as an important social, political, and cultural institution.",
+      am: "ይህ ክፍል የገዳ ስርዓትን እንደ ማህበራዊ፣ ፖለቲካዊ እና ባህላዊ ተቋም ያቀርባል።",
+      or: "Kutaan kun Sirna Gadaa akka dhaabbata hawaasaa, siyaasaa fi aadaa barbaachisaa tahetti ibsa.",
+    },
+  },
+  3: {
+    subtype: { en: "History Gallery", am: "የታሪክ ክፍል", or: "Kutaa Seenaa" },
+    description: {
+      en: "Learn how local political structures developed into organized state systems.",
+      am: "የአካባቢ ፖለቲካዊ መዋቅሮች ወደ የተደራጀ መንግስት እንዴት እንደተለወጡ ይመልከቱ።",
+      or: "Caasaaleen siyaasaa naannoo gara mootummaa qindaaʼetti akkamitti akka guddatan ilaali.",
+    },
+  },
+  4: {
+    subtype: { en: "Biography Gallery", am: "የሕይወት ታሪክ ክፍል", or: "Kutaa Seenaa Jireenyaa" },
+    description: {
+      en: "This gallery presents Aba Jifar II, his leadership, palace history, diplomacy, trade, and legacy.",
+      am: "ይህ ክፍል ስለ አባ ጅፋር ሁለተኛ፣ መሪነቱ፣ ቤተመንግስት፣ ዲፕሎማሲ፣ ንግድ እና ቅርሱ ያቀርባል።",
+      or: "Kutaan kun waaʼee Abbaa Jifaar II, hooggansa isaa, seenaa masaraa, dippiloomaasii, daldalaa fi hambaa isaa dhiheessa.",
+    },
+  },
+  5: {
+    subtype: { en: "Religion and State", am: "ሃይማኖትና መንግስት", or: "Amantii fi Mootummaa" },
+    description: {
+      en: "Explore the role of Islam in education, culture, trade networks, political authority, and state development.",
+      am: "እስልምና በትምህርት፣ ባህል፣ ንግድ መስመሮች እና ፖለቲካዊ ሥርዓት ያለውን ሚና ይመልከቱ።",
+      or: "Gahee Islaamaa barnoota, aadaa, daldala, aangoo siyaasaa fi guddina mootummaa keessatti ilaali.",
+    },
+  },
+  6: {
+    subtype: { en: "First Floor Gallery", am: "የመጀመሪያ ወለል ክፍል", or: "Kutaa Darbii Jalqabaa" },
+    description: {
+      en: "This first-floor stop explains traditional justice, decision making, and systems of conflict resolution.",
+      am: "ይህ ክፍል ስለ ባህላዊ ፍትሕ፣ ውሳኔ አሰጣጥ እና ግጭት መፍትሔ ያብራራል።",
+      or: "Buufanni kun haqaa aadaa, murtii kennuu fi mala walitti buʼiinsa hiikuu ibsa.",
+    },
+  },
+  7: {
+    subtype: { en: "First Floor Gallery", am: "የመጀመሪያ ወለል ክፍል", or: "Kutaa Darbii Jalqabaa" },
+    description: {
+      en: "This room introduces defense organization, military objects, protection systems, and historical security practices.",
+      am: "ይህ ክፍል የመከላከያ አደረጃጀት፣ የጦር እቃዎች እና የደህንነት ልምዶችን ያሳያል።",
+      or: "Kutaan kun qindaaʼina ittisaa, meeshaalee waraanaa fi muuxannoo nageenyaa agarsiisa.",
+    },
+  },
+  8: {
+    subtype: { en: "First Floor Gallery", am: "የመጀመሪያ ወለል ክፍል", or: "Kutaa Darbii Jalqabaa" },
+    description: {
+      en: "This gallery explains administration, leadership communication, diplomacy, and relations with neighboring powers.",
+      am: "ይህ ክፍል አስተዳደር፣ የመሪነት ግንኙነት፣ ዲፕሎማሲ እና ጎረቤት ኃይሎች ጋር ግንኙነት ያብራራል።",
+      or: "Kutaan kun bulchiinsa, qunnamtii hoggansa, dippiloomaasii fi walitti dhufeenya humnoota ollaa ibsa.",
+    },
+  },
+  9: {
+    subtype: { en: "First Floor Gallery", am: "የመጀመሪያ ወለል ክፍል", or: "Kutaa Darbii Jalqabaa" },
+    description: {
+      en: "This section presents farming systems, tools, food production, land use, and agricultural knowledge.",
+      am: "ይህ ክፍል የግብርና ስርዓት፣ መሳሪያዎች፣ የምግብ ምርት እና የመሬት አጠቃቀምን ያቀርባል።",
+      or: "Kutaan kun sirna qonnaa, meeshaalee, oomisha nyaataa, itti fayyadama lafaa fi beekumsa qonnaa dhiheessa.",
+    },
+  },
+  10: {
+    subtype: { en: "First Floor Gallery", am: "የመጀመሪያ ወለል ክፍል", or: "Kutaa Darbii Jalqabaa" },
+    description: {
+      en: "This stop highlights local industry, production, materials, technology, and craft practices.",
+      am: "ይህ ክፍል የአካባቢ ምርት፣ ቁሳቁሶች፣ ቴክኖሎጂ እና የእጅ ሙያ ልምዶችን ያሳያል።",
+      or: "Buufanni kun oomisha naannoo, meeshaalee, teeknooloojii fi hojii harkaa agarsiisa.",
+    },
+  },
+  11: {
+    subtype: { en: "First Floor Gallery", am: "የመጀመሪያ ወለል ክፍል", or: "Kutaa Darbii Jalqabaa" },
+    description: {
+      en: "This gallery explains markets, trade routes, exchange goods, merchants, and economic connections.",
+      am: "ይህ ክፍል ገበያዎች፣ የንግድ መስመሮች፣ የልውውጥ እቃዎች እና ኢኮኖሚያዊ ግንኙነቶችን ያብራራል።",
+      or: "Kutaan kun gabaa, daandii daldalaa, meeshaalee waljijjiirraa, daldaltoota fi walitti hidhaminsa dinagdee ibsa.",
+    },
+  },
+  12: {
+    subtype: { en: "Family Room", am: "የቤተሰብ ክፍል", or: "Kutaa Maatii" },
+    description: {
+      en: "A family-room exhibit presenting household history, family memory, and personal objects connected to Aba Jifar.",
+      am: "ይህ የቤተሰብ ክፍል የቤተሰብ ታሪክ፣ ትውስታ እና የግል እቃዎችን ያቀርባል።",
+      or: "Kutaan kun seenaa maatii, yaadannoo maatii fi meeshaalee dhuunfaa Abbaa Jifaar waliin walqabatan agarsiisa.",
+    },
+  },
+  13: {
+    subtype: { en: "Family Room", am: "የቤተሰብ ክፍል", or: "Kutaa Maatii" },
+    description: {
+      en: "A second family-room exhibit for domestic life, family stories, photographs, and cultural objects.",
+      am: "ይህ ክፍል የቤት ሕይወት፣ የቤተሰብ ታሪኮች፣ ፎቶዎች እና ባህላዊ እቃዎችን ያሳያል።",
+      or: "Kutaan kun jireenya mana keessaa, seenaa maatii, suuraalee fi meeshaalee aadaa dhiheessa.",
+    },
+  },
+  14: {
+    subtype: { en: "Family Room", am: "የቤተሰብ ክፍል", or: "Kutaa Maatii" },
+    description: {
+      en: "A third family-room exhibit presenting family heritage, private space, and continuity of tradition.",
+      am: "ይህ ክፍል የቤተሰብ ቅርስ፣ የግል ቦታ እና የባህል ቀጣይነትን ያቀርባል።",
+      or: "Kutaan kun hambaa maatii, iddoo dhuunfaa fi itti fufiinsa aadaa dhiheessa.",
+    },
+  },
+  15: {
+    subtype: { en: "Kingdom Gallery", am: "የመንግስት ክፍል", or: "Kutaa Mootummaa" },
+    description: {
+      en: "Explore the Gibe Kingdom context, neighboring kingdoms, trade, alliances, conflict, and cultural exchange.",
+      am: "የጊቤ መንግስትን፣ ጎረቤት መንግስታትን፣ ንግድን እና ባህላዊ ልውውጥን ይመልከቱ።",
+      or: "Haala Mootummaa Gibe, mootummoota ollaa, daldala, waliigaltee, walitti buʼiinsa fi waljijjiirraa aadaa qoradhu.",
+    },
+  },
+  16: {
+    subtype: { en: "Architecture", am: "ሥነ ሕንፃ", or: "Ijaarsa" },
+    description: {
+      en: "This stop explains construction methods, local materials, craftsmanship, structure, and conservation ideas.",
+      am: "ይህ ክፍል የግንባታ ዘዴዎችን፣ የአካባቢ ቁሳቁስን፣ የሙያ ስራን እና ጥበቃን ያብራራል።",
+      or: "Buufanni kun mala ijaarsa, meeshaalee naannoo, ogummaa, caasaa fi kunuunsa hambaa ibsa.",
+    },
+  },
+  17: {
+    subtype: { en: "Culture and Performance", am: "ባህልና ትርኢት", or: "Aadaa fi Agarsiisa" },
+    description: {
+      en: "This area presents traditional wrestling as sport, performance, social event, and cultural memory.",
+      am: "ይህ ክፍል ባህላዊ ትግልን እንደ ስፖርት፣ ትርኢት እና ማህበራዊ ክስተት ያቀርባል።",
+      or: "Kutaan kun waldhaansoo aadaa akka tapha, agarsiisa, taatee hawaasaa fi yaadannoo aadaatti dhiheessa.",
+    },
+  },
+  18: {
+    subtype: { en: "Open Space", am: "ክፍት ቦታ", or: "Iddoo Bana" },
+    description: {
+      en: "The courtyard works as a spatial orientation point and a gathering area inside the visitor route.",
+      am: "አደባባዩ የአቀማመጥ መለያ እና የስብሰባ ቦታ ነው።",
+      or: "Mooraan iddoo kallattii itti hubatan fi walitti qabama daawwattootaa dha.",
+    },
+  },
+  19: {
+    subtype: { en: "Social History", am: "ማህበራዊ ታሪክ", or: "Seenaa Hawaasaa" },
+    description: {
+      en: "This gallery highlights women's roles in leadership, household economy, craft, ceremony, and cultural knowledge.",
+      am: "ይህ ክፍል የሴቶችን ሚና በመሪነት፣ ቤተሰብ ኢኮኖሚ፣ ሙያ እና ባህል ያሳያል።",
+      or: "Kutaan kun gahee dubartootaa hooggansa, diinagdee mana, hojii harkaa, sirna aadaa fi beekumsa keessatti ibsa.",
+    },
+  },
+};
+for (const r of ABA_ROOMS) {
+  const c = ABA_ROOM_CONTENT[r.id];
+  if (c) { r.subtype = c.subtype; r.description = c.description; }
+}
+
 // Match the SVG viewBox (1190.65 × 830.28) at scale 0.06.
 const ABA_PLAN_BOUNDS = { minX: 0, maxX: 71.44, minZ: 0, maxZ: 49.82 };
 

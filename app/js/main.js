@@ -48,6 +48,8 @@ const I18N = {
     "drawer.directions":  "Get Directions",
     "floor.all":          "All",
     "loader.building":    "Building map…",
+    "info.routeTip":      "Route Tip",
+    "info.routeTipText":  "Tap a room number to learn more.",
   },
   am: {
     "topbar.search":      "ጋለሪዎችን፣ መገልገያዎችን ይፈልጉ…",
@@ -68,8 +70,36 @@ const I18N = {
     "drawer.directions":  "አቅጣጫ ያግኙ",
     "floor.all":          "ሁሉም",
     "loader.building":    "ካርታ በመገንባት ላይ…",
+    "info.routeTip":      "የመንገድ ምክር",
+    "info.routeTipText":  "ተጨማሪ መረጃ ለማየት የክፍሉን ቁጥር ይንኩ።",
+  },
+  or: {
+    "topbar.search":      "Kutaa, mata duree, yookaan lakkoofsa barbaadi…",
+    "topbar.iso":         "Iso",
+    "topbar.top":         "Olii",
+    "topbar.directions":  "Daandii",
+    "directions.title":   "Daandii",
+    "directions.start":   "Iddoo ka’umsaa filadhu",
+    "directions.end":     "Iddoo galmaa filadhu",
+    "directions.swap":    "↑↓ Jijjiiri",
+    "directions.clear":   "Daandii balleessi",
+    "directions.hint":    "Iddoo barbaaddu agarsiisuuf kutaa kamiyyuu tuqi.",
+    "drawer.collections": "Walitti qabamaa",
+    "drawer.floor":       "Darbii",
+    "drawer.view":        "Ilaalcha",
+    "drawer.explode":     "Ilaalcha babal’ate jijjiiri",
+    "drawer.reset":       "Kaameeraa deebisi",
+    "drawer.directions":  "Daandii argadhu",
+    "floor.all":          "Hunda",
+    "loader.building":    "Kaartaa qopheessaa jirra…",
+    "info.routeTip":      "Gorsa Daandii",
+    "info.routeTipText":  "Odeeffannoo argachuuf lakkoofsa kutaa tuqi.",
   },
 };
+// 3-way cycle so the toggle button has a stable next-language order.
+const LANG_CYCLE = ["en", "am", "or"];
+// Label shown ON the button — represents the NEXT language to switch to.
+const LANG_LABEL = { en: "አ", am: "OR", or: "EN" };
 
 let currentLang = (function () {
   try { return localStorage.getItem("lang") || "en"; } catch { return "en"; }
@@ -80,19 +110,32 @@ function t(key) {
 }
 
 function categoryLabel(cat) {
-  return (currentLang === "am" && cat?.labelAm) ? cat.labelAm : cat?.label;
+  // Categories only ship EN + AM. For OR we fall back to EN until
+  // dedicated Afaan Oromo category labels are added.
+  if (currentLang === "am" && cat?.labelAm) return cat.labelAm;
+  return cat?.label;
 }
 function buildingName(b) {
-  return (currentLang === "am" && b?.nameAm) ? b.nameAm : b?.name;
+  if (currentLang === "am" && b?.nameAm) return b.nameAm;
+  return b?.name;
 }
 function buildingSubtitle(b) {
-  return (currentLang === "am" && b?.subtitleAm) ? b.subtitleAm : b?.subtitle;
+  if (currentLang === "am" && b?.subtitleAm) return b.subtitleAm;
+  return b?.subtitle;
+}
+function roomSubtype(room) {
+  return room?.subtype?.[currentLang] || room?.subtype?.en || "";
+}
+function roomDescription(room) {
+  return room?.description?.[currentLang] || room?.description?.en || "";
 }
 
 function applyLanguage(lang) {
+  if (!I18N[lang]) lang = "en";
   currentLang = lang;
   try { localStorage.setItem("lang", lang); } catch {}
-  document.documentElement.lang = lang === "am" ? "am" : "en";
+  // Set <html lang="…"> — "om" is the ISO 639-1 code for Oromo.
+  document.documentElement.lang = ({ en: "en", am: "am", or: "om" })[lang] || "en";
 
   // Static text & placeholders flagged with data-i18n / data-i18n-placeholder.
   document.querySelectorAll("[data-i18n]").forEach((el) => {
@@ -125,10 +168,14 @@ function applyLanguage(lang) {
   if (mNameEl) mNameEl.textContent = buildingName(ACTIVE_BUILDING);
   if (mSubEl)  mSubEl.textContent  = buildingSubtitle(ACTIVE_BUILDING);
 
-  // Toggle button shows the OTHER language as a hint to switch.
+  // Toggle button shows the NEXT language in the EN → AM → OR cycle.
   document.querySelectorAll(".lang-toggle").forEach((el) => {
-    el.textContent = lang === "am" ? "EN" : "አ";
+    el.textContent = LANG_LABEL[lang] || "አ";
   });
+
+  // Re-render the currently selected room's info panel (if any) so the
+  // narrative / subtype updates in place when the user changes language.
+  if (typeof refreshSelectedInfo === "function") refreshSelectedInfo();
 }
 
 const canvas = document.getElementById("stage");
@@ -410,13 +457,21 @@ function showRoomInLegend(room) {
 
   infoTitle.textContent = room.name;
   infoSub.textContent   = `Room ${room.id} · Floor ${room.floor}`;
-  infoChip.textContent  = categoryLabel(cat);
+  infoChip.textContent  = roomSubtype(room) || categoryLabel(cat);
   infoChip.dataset.i18nCat = room.category;
   infoChip.style.background = color;
 
   roomPicEl.innerHTML = "";
   const thumb = buildRoomThumbnail(room, color);
   if (thumb) roomPicEl.appendChild(thumb);
+
+  // Narrative description, if the room has trilingual content.
+  const infoDescEl = document.getElementById("info-desc");
+  if (infoDescEl) {
+    const desc = roomDescription(room);
+    infoDescEl.textContent = desc;
+    infoDescEl.hidden = !desc;
+  }
 
   infoMeta.innerHTML = "";
   const meta = [
@@ -433,8 +488,20 @@ function showRoomInLegend(room) {
     infoMeta.append(dt, dd);
   }
 
+  // Route-tip footer — "Tap a room number to learn more." per language.
+  const tipLabelEl = document.getElementById("info-tip-label");
+  const tipBodyEl  = document.getElementById("info-tip-body");
+  if (tipLabelEl) tipLabelEl.textContent = t("info.routeTip");
+  if (tipBodyEl)  tipBodyEl.textContent  = t("info.routeTipText");
+
   legendCategoriesEl.hidden = true;
   legendInfoEl.hidden       = false;
+}
+
+// Exposed so applyLanguage() can re-render the open info card in the
+// new language without requiring the user to re-click the room.
+function refreshSelectedInfo() {
+  if (selected?.userData?.room) showRoomInLegend(selected.userData.room);
 }
 
 function showCategoriesInLegend() {
@@ -1276,9 +1343,10 @@ document.getElementById("mobile-reset")?.addEventListener("click", () => {
   flyTo(new THREE.Vector3(0, 6, 0), new THREE.Vector3(50, 55, 50), 60);
 });
 
-// Language toggle — swaps the visible UI between English and Amharic.
+// Language toggle — cycles English → Amharic → Afaan Oromo → English.
 document.getElementById("lang-toggle")?.addEventListener("click", () => {
-  applyLanguage(currentLang === "am" ? "en" : "am");
+  const next = LANG_CYCLE[(LANG_CYCLE.indexOf(currentLang) + 1) % LANG_CYCLE.length];
+  applyLanguage(next);
 });
 
 // --- Collections legend (mobile) — populated from CATEGORIES ---
