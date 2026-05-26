@@ -377,10 +377,13 @@ function buildSitumFloor(group, floor, roomGroups) {
     group.add(rg);
     roomGroups.push(rg);
 
-    // Floating numbered stop badges disabled at user request — uncomment
-    // to bring them back.
-    // const badge = buildRoomStopBadge(room);
-    // if (badge) group.add(badge);
+    // Floating numbered stop badge for every room. The badge is
+    // attached to the floor group so it inherits the same visibility
+    // as the room blocks — switching to Ground Floor hides every
+    // first-floor badge automatically, and vice versa. All view
+    // shows every floor's badges together.
+    const badge = buildRoomStopBadge(room);
+    if (badge) group.add(badge);
   }
 
   // Outdoor walking network — ground floor only.
