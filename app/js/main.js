@@ -446,6 +446,10 @@ const roomPicEl          = document.getElementById("room-pic");
 document.getElementById("legend-back").addEventListener("click", () => {
   if (selected) restoreGroup(selected);
   selected = null;
+  // Pause the room video so its audio doesn't keep playing behind
+  // the Collections list.
+  const videoEl = document.getElementById("room-video-el");
+  if (videoEl) videoEl.pause();
   showCategoriesInLegend();
 });
 document.getElementById("info-directions").addEventListener("click", () => {
@@ -466,6 +470,27 @@ function showRoomInLegend(room) {
   roomPicEl.innerHTML = "";
   const thumb = buildRoomThumbnail(room, color);
   if (thumb) roomPicEl.appendChild(thumb);
+
+  // 3D room video (if the room has a clip). The video element is
+  // reused across rooms — swap its src + reload, or hide the
+  // wrapper entirely on rooms without a video. The thumbnail is
+  // hidden to give the video the full picture slot.
+  const videoWrapEl = document.getElementById("room-video");
+  const videoEl     = document.getElementById("room-video-el");
+  if (videoWrapEl && videoEl) {
+    if (room.video) {
+      videoEl.src = room.video;
+      videoEl.load();
+      videoWrapEl.hidden = false;
+      roomPicEl.hidden = true;
+    } else {
+      videoEl.pause();
+      videoEl.removeAttribute("src");
+      videoEl.load();
+      videoWrapEl.hidden = true;
+      roomPicEl.hidden = false;
+    }
+  }
 
   // Narrative description, if the room has trilingual content.
   const infoDescEl = document.getElementById("info-desc");

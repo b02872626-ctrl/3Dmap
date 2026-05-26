@@ -432,9 +432,17 @@ const ABA_ROOM_CONTENT = {
     },
   },
 };
+// Optional MP4 clip URLs for rooms that have a 3D video preview.
+// Files live under app/assets/videos/ and are served by the static
+// site so the <video> element can stream them directly.
+const ABA_ROOM_VIDEOS = {
+  2: "assets/videos/ground-stop-2.mp4",   // Geda System
+  4: "assets/videos/ground-stop-4.mp4",   // Aba Jifar II
+};
 for (const r of ABA_ROOMS) {
   const c = ABA_ROOM_CONTENT[r.id];
   if (c) { r.subtype = c.subtype; r.description = c.description; }
+  if (ABA_ROOM_VIDEOS[r.id]) r.video = ABA_ROOM_VIDEOS[r.id];
 }
 
 // Match the SVG viewBox (1190.65 × 830.28) at scale 0.06.
