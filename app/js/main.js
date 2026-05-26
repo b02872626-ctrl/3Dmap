@@ -190,13 +190,20 @@ for (const floor of FLOORS) {
   tryReplaceWithFBX(fbxLoader, floor.id, floorGroups, floor.fbx);
 }
 
-// Flatten meshes for raycasting + roomId lookup
-const pickables = [];
+// Room lookup by id — used by the picker to resolve a pin click
+// back to the room's THREE.Group.
 const groupByRoomId = new Map();
 for (const rg of roomGroups) {
   groupByRoomId.set(rg.userData.roomId, rg);
-  rg.traverse((c) => { if (c.isMesh) pickables.push(c); });
 }
+
+// Pickables = only the floating numbered "stop" badges. Clicking
+// the room block itself is intentionally disabled — visitors select
+// rooms by tapping the pin, matching the museum guide prototype.
+const pickables = [];
+root.traverse((o) => {
+  if (o.userData?.kind === "roomStop") pickables.push(o);
+});
 
 // ---------------- Navigation graph + route layer ----------------
 const graph = buildGraph();
@@ -318,6 +325,13 @@ function setPointerFromEvent(e) {
 }
 
 function getRoomGroup(obj) {
+  // The picker only ever returns hits on roomStop sprites — resolve
+  // them straight back to the room's Group via the lookup map. Walk
+  // up as a defensive fallback for any future hit type that might
+  // be nested inside a room group.
+  if (obj?.userData?.kind === "roomStop") {
+    return groupByRoomId.get(obj.userData.roomId) || null;
+  }
   let n = obj;
   while (n) {
     if (n.userData?.kind === "room") return n;
