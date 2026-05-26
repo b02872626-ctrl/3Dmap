@@ -222,15 +222,17 @@ function applyFloorLayout() {
     group.userData.targetY = y;
     y += gap;
   }
-  // Toggle outdoor decor: shown only in All view. Single-floor views
-  // hide the lawn, trees, lamps, gate, plaza, paths, waypoint markers,
-  // door pins, etc., so the user sees ONLY the chosen floor's rooms.
-  const isAll = activeFloor === "all";
+  // Toggle outdoor decor: shown in All view OR while the user is
+  // actively looking at directions (so the route line + numbered
+  // stops read on top of the actual plaza paving and paths). Hidden
+  // only when the user explicitly toggles a single floor for a clean
+  // building-only view.
+  const showDecor = activeFloor === "all" || directionsMode;
   const sceneDecor = root.getObjectByName("scene-outdoor-decor");
-  if (sceneDecor) sceneDecor.visible = isAll;
+  if (sceneDecor) sceneDecor.visible = showDecor;
   for (const fg of floorGroups.values()) {
     fg.children.forEach((c) => {
-      if (c.userData?.kind === "floorOutdoorDecor") c.visible = isAll;
+      if (c.userData?.kind === "floorOutdoorDecor") c.visible = showDecor;
     });
   }
   // Three modes drive the floor-1 roof + interior:
@@ -1068,6 +1070,10 @@ function openDirections(opts = {}) {
   showCategoriesInLegend();
   refreshDirectionsUI();
   if (dirStart && dirEnd) recomputeRoute();
+  // Bring outdoor decor (plaza, paths, lawn …) back if we're in a
+  // single-floor view — the route needs to read against the actual
+  // paving.
+  applyFloorLayout();
 }
 
 function closeDirections() {
@@ -1075,6 +1081,8 @@ function closeDirections() {
   pickingSlot = null;
   dirEl.classList.remove("visible");
   dirOpenBtn.classList.remove("active");
+  // Restore the previous single-floor "no decor" look if applicable.
+  applyFloorLayout();
   routeLayer.clear();
   dirStart = null; dirEnd = null;
   refreshDirectionsUI();
