@@ -1439,12 +1439,17 @@ function _addPatchColourPools(group, polyLocal, topY) {
   // bbox dimension — keeps pools inside even on narrow strips.
   const baseR = Math.max(0.5, Math.min(1.6, Math.min(w, d) * 0.40));
 
-  const Y_OFFSET = 0.03;   // 3 cm above the patch top → no z-fight
+  const Y_OFFSET = 0.03;     // 3 cm above the patch top → no z-fight
+  const Y_STEP   = 0.0015;   // each pool 1.5 mm higher than the previous
+
+  // Track placed pools so we can avoid heavy overlap. Each entry is
+  // [centerX, centerZ, radius].
+  const placed = [];
 
   for (let i = 0; i < poolCount; i++) {
-    let placed = false;
+    let made = false;
     let attempts = 0;
-    while (!placed && attempts < 40) {
+    while (!made && attempts < 40) {
       attempts++;
       const px = minX + Math.random() * w;
       const pz = minZ + Math.random() * d;
@@ -1455,9 +1460,8 @@ function _addPatchColourPools(group, polyLocal, topY) {
       let r = baseR * (0.65 + Math.random() * 0.6);
 
       // Iteratively shrink r until every polygon vertex lies inside
-      // the parent patch. Bail if we can't fit even a tiny pool.
-      // rotateX(-π/2) on the mesh maps geom (x, y, 0) → world
-      // (x, 0, -y), so the vertex's world Z = pz - r*sin(a).
+      // the parent patch. rotateX(-π/2) on the mesh maps geom (x, y, 0)
+      // → world (x, 0, -y), so vertex world Z = pz - r*sin(a).
       let allInside = false;
       for (let shrink = 0; shrink < 6; shrink++) {
         allInside = true;
@@ -1473,19 +1477,29 @@ function _addPatchColourPools(group, polyLocal, topY) {
       }
       if (!allInside) continue;
 
+      // Soft anti-overlap: reject if a new pool's centre sits inside
+      // ~70 % of an existing pool's radius. Lets blobs touch / kiss
+      // for a natural look without stacking concentric duplicates.
+      let tooClose = false;
+      for (const [ex, ez, er] of placed) {
+        const minD = (er + r) * 0.70;
+        if (Math.hypot(px - ex, pz - ez) < minD) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+
       const mat = _plazaGrassPoolMats[Math.floor(Math.random() * _plazaGrassPoolMats.length)];
-      // Bake rotation into the geometry via thetaStart so we don't
-      // chain Mesh rotations (which made the polygon-test signs hard
-      // to keep aligned with the rendered vertices).
       const pool = new THREE.Mesh(
         new THREE.CircleGeometry(r, sides, rotation),
         mat,
       );
       pool.rotation.x = -Math.PI / 2;
-      pool.position.set(px, topY + Y_OFFSET, pz);
+      // Each successive pool sits a hair higher than the last so when
+      // two do overlap they don't z-fight against each other.
+      pool.position.set(px, topY + Y_OFFSET + placed.length * Y_STEP, pz);
       pool.receiveShadow = true;
       group.add(pool);
-      placed = true;
+      placed.push([px, pz, r]);
+      made = true;
     }
   }
 }
