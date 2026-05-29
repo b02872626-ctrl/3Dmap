@@ -461,15 +461,18 @@ const infoChip           = document.getElementById("info-chip");
 const infoTitle          = document.getElementById("info-title");
 const infoSub            = document.getElementById("info-sub");
 const infoMeta           = document.getElementById("info-meta");
-const roomPicEl          = document.getElementById("room-pic");
+// roomPicEl removed — the SVG room-footprint thumbnail was dropped
+// from index.html so no DOM lookup is needed.
 
 document.getElementById("legend-back").addEventListener("click", () => {
   if (selected) restoreGroup(selected);
   selected = null;
   // Pause the room video so its audio doesn't keep playing behind
-  // the Collections list.
+  // the Collections list. Also drop the .has-video width override so
+  // the Collections list isn't stretched out unnecessarily.
   const videoEl = document.getElementById("room-video-el");
   if (videoEl) videoEl.pause();
+  document.getElementById("legend")?.classList.remove("has-video");
   showCategoriesInLegend();
 });
 document.getElementById("info-directions").addEventListener("click", () => {
@@ -487,28 +490,26 @@ function showRoomInLegend(room) {
   infoChip.dataset.i18nCat = room.category;
   infoChip.style.background = color;
 
-  roomPicEl.innerHTML = "";
-  const thumb = buildRoomThumbnail(room, color);
-  if (thumb) roomPicEl.appendChild(thumb);
-
   // 3D room video (if the room has a clip). The video element is
   // reused across rooms — swap its src + reload, or hide the
-  // wrapper entirely on rooms without a video. The thumbnail is
-  // hidden to give the video the full picture slot.
+  // wrapper entirely on rooms without a video. We also toggle a
+  // .has-video class on the .legend so CSS can widen the card,
+  // giving the description below the player more breathing room.
   const videoWrapEl = document.getElementById("room-video");
   const videoEl     = document.getElementById("room-video-el");
+  const legendEl    = document.getElementById("legend");
   if (videoWrapEl && videoEl) {
     if (room.video) {
       videoEl.src = room.video;
       videoEl.load();
       videoWrapEl.hidden = false;
-      roomPicEl.hidden = true;
+      legendEl?.classList.add("has-video");
     } else {
       videoEl.pause();
       videoEl.removeAttribute("src");
       videoEl.load();
       videoWrapEl.hidden = true;
-      roomPicEl.hidden = false;
+      legendEl?.classList.remove("has-video");
     }
   }
 

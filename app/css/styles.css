@@ -577,6 +577,18 @@ html, body {
   box-shadow: var(--shadow-lg);
   padding: 14px 14px 10px;
   z-index: 9;
+  transition: width 0.18s var(--ease);
+}
+/* When the selected room has a 3D video, give the card extra width
+   + a bigger description so the player + narrative + meta + tip all
+   read comfortably without crowding each other. */
+.legend.has-video {
+  width: 500px;
+}
+.legend.has-video .info-desc {
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 10px 0 6px;
 }
 
 /* Room video slot inside the info card — full width, 16:9 letterbox
