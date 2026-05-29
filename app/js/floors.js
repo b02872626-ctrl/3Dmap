@@ -1418,9 +1418,12 @@ const plazaGrassMat = new THREE.MeshStandardMaterial({
 });
 
 // Scatter low-poly colour pools across one grass patch. Each pool is
-// a CircleGeometry with 5-7 sides → reads as a chunky polygon rather
-// than a smooth disc. Sized so a single pool covers ~2 m² and the
-// count scales with patch area.
+// a CircleGeometry with 5-7 sides — reads as a chunky polygon rather
+// than a smooth disc. Pools are containment-tested at the polygon
+// VERTEX level (not just the centre), and the radius is iteratively
+// shrunk until every vertex sits inside the parent patch — so a pool
+// never spills outside its curb. Pools sit 3 cm above the patch top
+// to avoid Z-fighting with the grass surface.
 function _addPatchColourPools(group, polyLocal, topY) {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
   for (const [x, z] of polyLocal) {
@@ -1432,22 +1435,58 @@ function _addPatchColourPools(group, polyLocal, topY) {
   const area = w * d;
   // One pool per ~5 m², clamped so a tiny patch still gets a couple.
   const poolCount = Math.max(2, Math.min(10, Math.round(area / 5)));
-  // Bigger pools for bigger patches, but always ≥ 0.9 m radius so
-  // the polygonal shape reads from a typical iso distance.
-  const baseR = Math.max(0.9, Math.min(2.2, Math.min(w, d) * 0.45));
+  // baseR scales with patch size but won't exceed ~40% of the smaller
+  // bbox dimension — keeps pools inside even on narrow strips.
+  const baseR = Math.max(0.5, Math.min(1.6, Math.min(w, d) * 0.40));
+
+  const Y_OFFSET = 0.03;   // 3 cm above the patch top → no z-fight
+
   for (let i = 0; i < poolCount; i++) {
-    const px = minX + Math.random() * w;
-    const pz = minZ + Math.random() * d;
-    if (!_pointInPoly2D(px, pz, polyLocal)) { i--; continue; }
-    const r = baseR * (0.65 + Math.random() * 0.6);
-    const sides = 5 + Math.floor(Math.random() * 3);   // 5, 6, or 7
-    const mat = _plazaGrassPoolMats[Math.floor(Math.random() * _plazaGrassPoolMats.length)];
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(r, sides), mat);
-    pool.rotation.x = -Math.PI / 2;
-    pool.rotation.z = Math.random() * Math.PI * 2;
-    pool.position.set(px, topY + 0.002, pz);
-    pool.receiveShadow = true;
-    group.add(pool);
+    let placed = false;
+    let attempts = 0;
+    while (!placed && attempts < 40) {
+      attempts++;
+      const px = minX + Math.random() * w;
+      const pz = minZ + Math.random() * d;
+      if (!_pointInPoly2D(px, pz, polyLocal)) continue;
+
+      const sides = 5 + Math.floor(Math.random() * 3);          // 5, 6, or 7
+      const rotation = Math.random() * Math.PI * 2;
+      let r = baseR * (0.65 + Math.random() * 0.6);
+
+      // Iteratively shrink r until every polygon vertex lies inside
+      // the parent patch. Bail if we can't fit even a tiny pool.
+      // rotateX(-π/2) on the mesh maps geom (x, y, 0) → world
+      // (x, 0, -y), so the vertex's world Z = pz - r*sin(a).
+      let allInside = false;
+      for (let shrink = 0; shrink < 6; shrink++) {
+        allInside = true;
+        for (let v = 0; v < sides; v++) {
+          const a = rotation + (v / sides) * Math.PI * 2;
+          const vx = px + r * Math.cos(a);
+          const vz = pz - r * Math.sin(a);
+          if (!_pointInPoly2D(vx, vz, polyLocal)) { allInside = false; break; }
+        }
+        if (allInside) break;
+        r *= 0.75;
+        if (r < 0.30) break;
+      }
+      if (!allInside) continue;
+
+      const mat = _plazaGrassPoolMats[Math.floor(Math.random() * _plazaGrassPoolMats.length)];
+      // Bake rotation into the geometry via thetaStart so we don't
+      // chain Mesh rotations (which made the polygon-test signs hard
+      // to keep aligned with the rendered vertices).
+      const pool = new THREE.Mesh(
+        new THREE.CircleGeometry(r, sides, rotation),
+        mat,
+      );
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(px, topY + Y_OFFSET, pz);
+      pool.receiveShadow = true;
+      group.add(pool);
+      placed = true;
+    }
   }
 }
 
