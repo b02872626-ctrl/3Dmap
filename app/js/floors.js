@@ -2239,8 +2239,14 @@ function ornamentArchway(cx, cz, baseY) {
 //  artwork on the external walls, and a single bench leaning against
 //  the longest external wall.
 // -----------------------------------------------------------------
+// Parchment-cream exhibit canvas — reference shows cream paper with a
+// painted illustration on the right and faded calligraphy on the left.
 const interiorFrameMat = new THREE.MeshStandardMaterial({
-  color: 0x2a1c12, roughness: 0.78, metalness: 0, flatShading: true,
+  color: 0xe6dcc4, roughness: 0.95, metalness: 0, flatShading: true,
+});
+// Subtle teal-grey illustration patch inside the parchment frame.
+const interiorIllustrationMat = new THREE.MeshStandardMaterial({
+  color: 0x6c8a82, roughness: 0.9, metalness: 0, flatShading: true,
 });
 const interiorTrimMat  = new THREE.MeshStandardMaterial({
   color: 0xc89a3d, roughness: 0.45, metalness: 0.55, flatShading: true,
@@ -2266,6 +2272,57 @@ const interiorVitrineBaseMat = new THREE.MeshStandardMaterial({
   color: 0x2d2018, roughness: 0.75, metalness: 0, flatShading: true,
 });
 
+// Warm terracotta tile material with a subtle procedural grid — used
+// to surface the interior floor so the rooms read like the museum's
+// real terracotta-tile galleries.
+function _makeTerracottaTileTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#b06848";
+  ctx.fillRect(0, 0, 256, 256);
+  // 4×4 grid of tiles, with grout lines slightly darker.
+  ctx.strokeStyle = "rgba(60, 25, 12, 0.45)";
+  ctx.lineWidth = 2;
+  const step = 64;
+  for (let i = 0; i <= 256; i += step) {
+    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 256); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(256, i); ctx.stroke();
+  }
+  // Soft tile shading — each tile a slightly different brightness.
+  for (let ty = 0; ty < 4; ty++) {
+    for (let tx = 0; tx < 4; tx++) {
+      ctx.fillStyle = `rgba(${(Math.random() < 0.5) ? 0 : 255}, ${(Math.random()<0.5) ? 0 : 255}, ${(Math.random()<0.5) ? 0 : 255}, 0.05)`;
+      ctx.fillRect(tx * step + 2, ty * step + 2, step - 4, step - 4);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const TERRACOTTA_TEX = _makeTerracottaTileTexture();
+TERRACOTTA_TEX.repeat.set(2.5, 2.5);
+const interiorFloorMat = new THREE.MeshStandardMaterial({
+  color: 0xc07050, map: TERRACOTTA_TEX,
+  roughness: 0.92, metalness: 0, flatShading: true,
+});
+
+// Waist-high dark walnut wainscoting + the embedded TV materials.
+const interiorWainscotMat = new THREE.MeshStandardMaterial({
+  color: 0x3a2418, roughness: 0.82, metalness: 0, flatShading: true,
+});
+const interiorTvScreenMat = new THREE.MeshStandardMaterial({
+  color: 0x07070b, roughness: 0.35, metalness: 0.4, flatShading: true,
+  emissive: 0x0a0a14, emissiveIntensity: 0.3,
+});
+const interiorTvBezelMat = new THREE.MeshStandardMaterial({
+  color: 0x18181c, roughness: 0.7, metalness: 0.3, flatShading: true,
+});
+// Rooms that get an embedded HDTV on a wall (they also have an MP4
+// clip in the info card).
+const ROOMS_WITH_TV = new Set([2, 4]);
+
 // Tiny helper — does `(px, pz)` lie inside the polygon?
 function _pointInPoly2D(px, pz, poly) {
   let inside = false;
@@ -2284,6 +2341,23 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
                                   wallsBaseY, wallHeight) {
   if (!Array.isArray(polygonLocal) || polygonLocal.length < 3) return;
   if (room.open) return;
+
+  // 0. Terracotta tile floor — fills the room polygon at floor level
+  //    so the interior reads as the warm tiled gallery in the reference.
+  {
+    const floorShape = new THREE.Shape();
+    floorShape.moveTo(polygonLocal[0][0], polygonLocal[0][1]);
+    for (let i = 1; i < polygonLocal.length; i++) {
+      floorShape.lineTo(polygonLocal[i][0], polygonLocal[i][1]);
+    }
+    floorShape.closePath();
+    const floorGeo = new THREE.ShapeGeometry(floorShape);
+    floorGeo.rotateX(-Math.PI / 2);
+    floorGeo.translate(0, wallsBaseY + 0.005, 0);
+    const floorMesh = new THREE.Mesh(floorGeo, interiorFloorMat);
+    floorMesh.receiveShadow = true;
+    group.add(floorMesh);
+  }
 
   // Polygon bbox first — its centre is our preferred "room centre"
   // for placing the rug + centerpiece pedestal, since it reads as
@@ -2405,11 +2479,13 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
     usedCorners.push([cpx, cpz]);
   }
 
-  // 4. Walk polygon edges — framed painting + brass plaque on each
-  //    non-shared (external) wall, plus one bench against the longest
+  // 4. Walk polygon edges — wainscoting + parchment exhibit panel +
+  //    brass plaque on each non-shared (external) wall. Optionally an
+  //    embedded HDTV (rooms 2 & 4) and one bench against the longest
   //    wall.
   const areaSign = polygonSignedArea2D(polygonLocal) >= 0 ? 1 : -1;
   let benchPlaced = false;
+  let tvPlaced = false;
 
   for (let i = 0; i < polygonLocal.length; i++) {
     const [ax, az] = polygonLocal[i];
@@ -2433,11 +2509,28 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
     const mz = az + ez / 2;
     const paintYaw = Math.atan2(inwardX, inwardZ);
 
-    // --- Framed painting at wall-mid height, slightly inset so the
-    //     trim doesn't z-fight the wall face. ---
-    const paintW = Math.min(0.7, edgeLen * 0.35);
-    const paintH = 0.42;
-    const paintY = wallsBaseY + wallHeight * 0.60;
+    // --- Waist-high dark walnut wainscoting along the lower wall ---
+    const WAINSCOT_H = 0.55;
+    const WAINSCOT_THICK = 0.025;
+    const wainscot = new THREE.Mesh(
+      new THREE.BoxGeometry(edgeLen, WAINSCOT_H, WAINSCOT_THICK),
+      interiorWainscotMat,
+    );
+    const wainscotInset = 0.03;
+    wainscot.position.set(
+      mx + inwardX * wainscotInset,
+      wallsBaseY + WAINSCOT_H / 2 + 0.02,
+      mz + inwardZ * wainscotInset,
+    );
+    wainscot.rotation.y = Math.atan2(-uz, ux);
+    wainscot.receiveShadow = true;
+    group.add(wainscot);
+
+    // --- Parchment exhibit panel: gold trim → cream parchment →
+    //     teal-grey illustration patch on the right half. ---
+    const paintW = Math.min(0.95, edgeLen * 0.42);
+    const paintH = 0.52;
+    const paintY = wallsBaseY + wallHeight * 0.62;
     const paintInset = 0.04;
     const ppx = mx + inwardX * paintInset;
     const ppz = mz + inwardZ * paintInset;
@@ -2461,6 +2554,59 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
     );
     canvas.rotation.y = paintYaw;
     group.add(canvas);
+
+    // Painted illustration zone — right half of the parchment, like
+    // the reference exhibit panel.
+    const illoW = paintW * 0.32;
+    const illoH = paintH * 0.72;
+    const illoOffsetAlong = paintW * 0.22; // slide right from center
+    const illo = new THREE.Mesh(
+      new THREE.PlaneGeometry(illoW, illoH),
+      interiorIllustrationMat,
+    );
+    illo.position.set(
+      ppx + inwardX * 0.008 + ux * illoOffsetAlong,
+      paintY,
+      ppz + inwardZ * 0.008 + uz * illoOffsetAlong,
+    );
+    illo.rotation.y = paintYaw;
+    group.add(illo);
+
+    // --- Embedded HDTV: rooms 2 & 4 (the ones with an MP4 clip).
+    //     Mounted on the first long enough external wall, opposite
+    //     side from the exhibit panel. ---
+    if (!tvPlaced && ROOMS_WITH_TV.has(room.id) && edgeLen > 1.6) {
+      const TV_W = Math.min(1.35, edgeLen * 0.6);
+      const TV_H = TV_W * 0.56;            // 16:9 letterbox
+      const TV_Y = wallsBaseY + wallHeight * 0.55;
+      // Slide the TV along this wall by a small offset so it doesn't
+      // overlap the parchment panel.
+      const tvAlongOffset = -paintW * 0.6 - 0.2;
+      const tcx = mx + inwardX * 0.05 + ux * tvAlongOffset;
+      const tcz = mz + inwardZ * 0.05 + uz * tvAlongOffset;
+
+      // Bezel (slightly larger dark frame)
+      const bezel = new THREE.Mesh(
+        new THREE.PlaneGeometry(TV_W + 0.06, TV_H + 0.06),
+        interiorTvBezelMat,
+      );
+      bezel.position.set(tcx, TV_Y, tcz);
+      bezel.rotation.y = paintYaw;
+      group.add(bezel);
+      // Black screen (sits 4mm proud of bezel)
+      const screen = new THREE.Mesh(
+        new THREE.PlaneGeometry(TV_W, TV_H),
+        interiorTvScreenMat,
+      );
+      screen.position.set(
+        tcx + inwardX * 0.005,
+        TV_Y,
+        tcz + inwardZ * 0.005,
+      );
+      screen.rotation.y = paintYaw;
+      group.add(screen);
+      tvPlaced = true;
+    }
 
     // --- Small brass plaque just below the painting (museum caption). ---
     const plaqueW = Math.min(0.28, paintW * 0.55);
