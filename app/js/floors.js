@@ -1402,68 +1402,56 @@ const PLAZA_GRASS_PATCHES = [
 // height by default so each lawn fills its curb like a planter bed.
 const GRASS_PATCH_HEIGHT = 0.06;
 
-// Procedural multi-shade green texture for the plaza grass patches.
-// Each patch material reuses the same canvas (RepeatWrapping) — inside
-// every patch the lawn reads as natural texture variation rather than
-// one flat colour. Generated once and cached.
-let _plazaGrassTex = null;
-function _getPlazaGrassTexture() {
-  if (_plazaGrassTex) return _plazaGrassTex;
-  const c = document.createElement("canvas");
-  // Bigger canvas + bigger world repeat = less visible tiling on the
-  // larger grass patches.
-  c.width = c.height = 512;
-  const ctx = c.getContext("2d");
-  // Mid-green base.
-  ctx.fillStyle = "#6f8a4d";
-  ctx.fillRect(0, 0, 512, 512);
-  // Soft, low-contrast blotches in three closely related green shades
-  // so the patch reads as a unified lawn with subtle variation — not
-  // a plaid / patchwork of distinct colours.
-  const shades = ["#637e44", "#788f55", "#6c8a4d"];
-  ctx.globalCompositeOperation = "source-over";
-  for (let i = 0; i < 70; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    const rx = 28 + Math.random() * 60;          // big soft pools
-    const ry = rx * (0.6 + Math.random() * 0.4);
-    // Radial gradient → the blotch fades out smoothly at its edges,
-    // killing the hard ellipse outlines that were reading as patches.
-    const shade = shades[Math.floor(Math.random() * shades.length)];
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, rx);
-    grad.addColorStop(0, shade + "55");          // ~33% alpha at the centre
-    grad.addColorStop(1, shade + "00");          // 0% alpha at the rim
-    ctx.fillStyle = grad;
-    ctx.fillRect(x - rx, y - ry, rx * 2, ry * 2);
+// Low-poly grass colour pools — large irregular polygons that sit
+// 1 mm above each patch, each tinted with one of a handful of green
+// shades. Materials are shared across all patches so the GPU only
+// uploads them once.
+const PLAZA_GRASS_BASE     = 0x6f8a4d;
+const PLAZA_GRASS_SHADES = [0x5d7a40, 0x6f8a4d, 0x789450, 0x65854a, 0x809b5a];
+const _plazaGrassPoolMats = PLAZA_GRASS_SHADES.map((c) =>
+  new THREE.MeshStandardMaterial({
+    color: c, roughness: 1.0, metalness: 0, flatShading: true,
+  }),
+);
+const plazaGrassMat = new THREE.MeshStandardMaterial({
+  color: PLAZA_GRASS_BASE, roughness: 1.0, metalness: 0, flatShading: true,
+});
+
+// Scatter low-poly colour pools across one grass patch. Each pool is
+// a CircleGeometry with 5-7 sides → reads as a chunky polygon rather
+// than a smooth disc. Sized so a single pool covers ~2 m² and the
+// count scales with patch area.
+function _addPatchColourPools(group, polyLocal, topY) {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, z] of polyLocal) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
   }
-  // Very faint per-pixel speckle for fine-grain texture (NOT contrast).
-  for (let i = 0; i < 800; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    const dark = Math.random() < 0.5;
-    ctx.fillStyle = dark
-      ? "rgba(50, 70, 30, 0.08)"
-      : "rgba(180, 205, 145, 0.07)";
-    ctx.fillRect(x, y, 1.2, 1.2);
+  const w = maxX - minX;
+  const d = maxZ - minZ;
+  const area = w * d;
+  // One pool per ~5 m², clamped so a tiny patch still gets a couple.
+  const poolCount = Math.max(2, Math.min(10, Math.round(area / 5)));
+  // Bigger pools for bigger patches, but always ≥ 0.9 m radius so
+  // the polygonal shape reads from a typical iso distance.
+  const baseR = Math.max(0.9, Math.min(2.2, Math.min(w, d) * 0.45));
+  for (let i = 0; i < poolCount; i++) {
+    const px = minX + Math.random() * w;
+    const pz = minZ + Math.random() * d;
+    if (!_pointInPoly2D(px, pz, polyLocal)) { i--; continue; }
+    const r = baseR * (0.65 + Math.random() * 0.6);
+    const sides = 5 + Math.floor(Math.random() * 3);   // 5, 6, or 7
+    const mat = _plazaGrassPoolMats[Math.floor(Math.random() * _plazaGrassPoolMats.length)];
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(r, sides), mat);
+    pool.rotation.x = -Math.PI / 2;
+    pool.rotation.z = Math.random() * Math.PI * 2;
+    pool.position.set(px, topY + 0.002, pz);
+    pool.receiveShadow = true;
+    group.add(pool);
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  _plazaGrassTex = tex;
-  return tex;
 }
 
 function addPlazaGrassPatches(group) {
-  const grassTex = _getPlazaGrassTexture();
-  // ExtrudeGeometry top-face UVs equal the polygon's local 2D coords
-  // in metres, so this scale is repeats-per-metre. 1/4 → one full
-  // texture repeat every 4 m, so the canvas variation reads as
-  // natural mottling rather than a tight plaid grid.
-  const grassMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, map: grassTex,
-    roughness: 1.0, metalness: 0, flatShading: true,
-  });
-  grassTex.repeat.set(1 / 4, 1 / 4);
   // Extrusion thickness equals the raise above plaza, so the patch
   // bottom is flush at plaza top and the patch top sits flush with
   // the curb's top.
@@ -1474,10 +1462,12 @@ function addPlazaGrassPatches(group) {
       x - planCenter.x,
       z - planCenter.z,
     ]);
-    const patch = buildExtrudedPolygon(polyLocal, GRASS_PATCH_HEIGHT, grassMat);
+    const patch = buildExtrudedPolygon(polyLocal, GRASS_PATCH_HEIGHT, plazaGrassMat);
     patch.position.y = topY;
     patch.receiveShadow = true;
     group.add(patch);
+    // Layer low-poly colour pools on top.
+    _addPatchColourPools(group, polyLocal, topY);
   }
 }
 
