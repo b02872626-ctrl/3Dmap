@@ -1477,13 +1477,13 @@ function _addPatchColourPools(group, polyLocal, topY) {
       }
       if (!allInside) continue;
 
-      // Soft anti-overlap: reject if a new pool's centre sits inside
-      // ~70 % of an existing pool's radius. Lets blobs touch / kiss
-      // for a natural look without stacking concentric duplicates.
+      // Hard anti-overlap: reject the candidate if any other pool's
+      // edge would intrude. We require centre-to-centre distance ≥
+      // sum of radii — pools can KISS but never overlap, so two
+      // colours never stack on top of each other inside the patch.
       let tooClose = false;
       for (const [ex, ez, er] of placed) {
-        const minD = (er + r) * 0.70;
-        if (Math.hypot(px - ex, pz - ez) < minD) { tooClose = true; break; }
+        if (Math.hypot(px - ex, pz - ez) < er + r) { tooClose = true; break; }
       }
       if (tooClose) continue;
 
