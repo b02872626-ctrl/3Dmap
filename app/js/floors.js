@@ -1410,36 +1410,41 @@ let _plazaGrassTex = null;
 function _getPlazaGrassTexture() {
   if (_plazaGrassTex) return _plazaGrassTex;
   const c = document.createElement("canvas");
-  c.width = c.height = 256;
+  // Bigger canvas + bigger world repeat = less visible tiling on the
+  // larger grass patches.
+  c.width = c.height = 512;
   const ctx = c.getContext("2d");
   // Mid-green base.
   ctx.fillStyle = "#6f8a4d";
-  ctx.fillRect(0, 0, 256, 256);
-  // Random soft blotches in five shades of green so the patch reads as
-  // mottled lawn instead of a flat plane. Alpha is kept moderate so
-  // the base colour still anchors the average tone.
-  const shades = ["#587a3c", "#5d7a40", "#789450", "#809b5a", "#65854a"];
+  ctx.fillRect(0, 0, 512, 512);
+  // Soft, low-contrast blotches in three closely related green shades
+  // so the patch reads as a unified lawn with subtle variation — not
+  // a plaid / patchwork of distinct colours.
+  const shades = ["#637e44", "#788f55", "#6c8a4d"];
   ctx.globalCompositeOperation = "source-over";
-  for (let i = 0; i < 130; i++) {
-    const x = Math.random() * 256;
-    const y = Math.random() * 256;
-    const rx = 6 + Math.random() * 26;
-    const ry = rx * (0.55 + Math.random() * 0.55);
-    ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
-    ctx.globalAlpha = 0.30 + Math.random() * 0.30;
-    ctx.beginPath();
-    ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
-    ctx.fill();
+  for (let i = 0; i < 70; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
+    const rx = 28 + Math.random() * 60;          // big soft pools
+    const ry = rx * (0.6 + Math.random() * 0.4);
+    // Radial gradient → the blotch fades out smoothly at its edges,
+    // killing the hard ellipse outlines that were reading as patches.
+    const shade = shades[Math.floor(Math.random() * shades.length)];
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, rx);
+    grad.addColorStop(0, shade + "55");          // ~33% alpha at the centre
+    grad.addColorStop(1, shade + "00");          // 0% alpha at the rim
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - rx, y - ry, rx * 2, ry * 2);
   }
-  ctx.globalAlpha = 1.0;
-  // Tiny per-pixel speckle on top — adds a fine-grain "grass blade"
-  // texture without any actual blade geometry.
-  for (let i = 0; i < 900; i++) {
-    const x = Math.random() * 256;
-    const y = Math.random() * 256;
+  // Very faint per-pixel speckle for fine-grain texture (NOT contrast).
+  for (let i = 0; i < 800; i++) {
+    const x = Math.random() * 512;
+    const y = Math.random() * 512;
     const dark = Math.random() < 0.5;
-    ctx.fillStyle = dark ? "rgba(40, 60, 25, 0.18)" : "rgba(190, 215, 150, 0.14)";
-    ctx.fillRect(x, y, 1.5, 1.5);
+    ctx.fillStyle = dark
+      ? "rgba(50, 70, 30, 0.08)"
+      : "rgba(180, 205, 145, 0.07)";
+    ctx.fillRect(x, y, 1.2, 1.2);
   }
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
@@ -1450,15 +1455,15 @@ function _getPlazaGrassTexture() {
 
 function addPlazaGrassPatches(group) {
   const grassTex = _getPlazaGrassTexture();
-  // World-space tiling: roughly 2 m of grass per texture repeat so
-  // every patch — even a small one — shows visible variation.
+  // ExtrudeGeometry top-face UVs equal the polygon's local 2D coords
+  // in metres, so this scale is repeats-per-metre. 1/4 → one full
+  // texture repeat every 4 m, so the canvas variation reads as
+  // natural mottling rather than a tight plaid grid.
   const grassMat = new THREE.MeshStandardMaterial({
     color: 0xffffff, map: grassTex,
     roughness: 1.0, metalness: 0, flatShading: true,
   });
-  // Note: ExtrudeGeometry top-face UVs equal the polygon's local 2D
-  // coords in metres, so this scale is metres-per-repeat.
-  grassTex.repeat.set(0.5, 0.5);
+  grassTex.repeat.set(1 / 4, 1 / 4);
   // Extrusion thickness equals the raise above plaza, so the patch
   // bottom is flush at plaza top and the patch top sits flush with
   // the curb's top.
