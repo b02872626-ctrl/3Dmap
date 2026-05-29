@@ -1795,8 +1795,12 @@ const TREE_POSITIONS = [
 // CylinderGeometry / ConeGeometry are indexed; IcosahedronGeometry is
 // non-indexed. BufferGeometryUtils.mergeGeometries refuses to mix
 // the two, so every primitive that goes into a merge is normalized
-// to non-indexed via toNonIndexed() first.
-function _ni(geo) { return geo.toNonIndexed(); }
+// to non-indexed via toNonIndexed() first. Guarded — calling
+// toNonIndexed on an already-non-indexed geometry logs a (harmless)
+// Three.js console warning.
+function _ni(geo) {
+  return geo.index ? geo.toNonIndexed() : geo;
+}
 
 function _buildConiferGeo(totalH) {
   const trunkH    = totalH * 0.22;

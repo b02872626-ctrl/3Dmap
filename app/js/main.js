@@ -218,6 +218,12 @@ const EXPLODE_GAP = 7;   // exploded stack — pull floors apart for clarity
 
 let activeFloor = "all"; // default view: all floors visible
 let exploded = false;
+// directionsMode flips when the user opens the Directions panel.
+// Declared up here (hoisted above applyFloorLayout) so that early
+// callers — e.g. restoreCameraView during boot — don't trip the
+// temporal-dead-zone ReferenceError. The "real" wiring lower in
+// the file still assigns + reads it.
+let directionsMode = false;
 
 function applyFloorLayout() {
   const gap = exploded ? EXPLODE_GAP : FLOOR_GAP;
@@ -1034,7 +1040,8 @@ setTimeout(() => {
 }, 400);
 
 // ---------------- Directions mode ----------------
-let directionsMode = false;
+// directionsMode is hoisted near the top of the file (above
+// applyFloorLayout) so it isn't redeclared here.
 let pickingSlot = "start";  // 'start' | 'end' | null
 let dirStart = null;        // room object
 let dirEnd   = null;
