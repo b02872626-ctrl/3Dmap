@@ -455,7 +455,11 @@ canvas.addEventListener("pointerleave", () => { pointerDownInfo = null; });
 // When a room is clicked, the left panel swaps from the Collections list
 // to an info card for that room (small SVG thumbnail of its footprint,
 // category chip, metadata, Get Directions CTA).
-const legendCategoriesEl = document.getElementById("legend-categories");
+// legendCategoriesEl removed — the Collections filter list was
+// dropped from index.html. Keep legendInfoEl around as the inner
+// info card host; legendEl is the whole panel and is what we toggle
+// hidden so the panel disappears entirely when no room is selected.
+const legendEl           = document.getElementById("legend");
 const legendInfoEl       = document.getElementById("legend-info");
 const infoChip           = document.getElementById("info-chip");
 const infoTitle          = document.getElementById("info-title");
@@ -464,15 +468,15 @@ const infoMeta           = document.getElementById("info-meta");
 // roomPicEl removed — the SVG room-footprint thumbnail was dropped
 // from index.html so no DOM lookup is needed.
 
-document.getElementById("legend-back").addEventListener("click", () => {
+// Close button on the info panel — drops the current room
+// selection, pauses any playing video, and hides the panel
+// entirely (replaces the old "back to Collections" arrow).
+document.getElementById("legend-close")?.addEventListener("click", () => {
   if (selected) restoreGroup(selected);
   selected = null;
-  // Pause the room video so its audio doesn't keep playing behind
-  // the Collections list. Also drop the .has-video width override so
-  // the Collections list isn't stretched out unnecessarily.
   const videoEl = document.getElementById("room-video-el");
   if (videoEl) videoEl.pause();
-  document.getElementById("legend")?.classList.remove("has-video");
+  legendEl?.classList.remove("has-video");
   showCategoriesInLegend();
 });
 document.getElementById("info-directions").addEventListener("click", () => {
@@ -542,7 +546,9 @@ function showRoomInLegend(room) {
   if (tipLabelEl) tipLabelEl.textContent = t("info.routeTip");
   if (tipBodyEl)  tipBodyEl.textContent  = t("info.routeTipText");
 
-  legendCategoriesEl.hidden = true;
+  // Reveal the whole panel — it's `hidden` by default so it only
+  // appears once the user has clicked a room.
+  legendEl?.removeAttribute("hidden");
   legendInfoEl.hidden       = false;
 }
 
@@ -552,9 +558,13 @@ function refreshSelectedInfo() {
   if (selected?.userData?.room) showRoomInLegend(selected.userData.room);
 }
 
+// The Collections list was removed, so "showing categories" now
+// just means hiding the entire panel — the user goes back to a
+// clean map. Kept under the old name so the existing callers
+// (close button, openDirections, etc.) don't need touching.
 function showCategoriesInLegend() {
-  legendCategoriesEl.hidden = false;
-  legendInfoEl.hidden       = true;
+  legendInfoEl.hidden = true;
+  legendEl?.setAttribute("hidden", "");
 }
 
 // Small SVG render of the room footprint — the polygon (if available)
@@ -752,27 +762,33 @@ document.getElementById("reset-cam").addEventListener("click", () => {
 });
 
 // ---------------- Legend / category filter ----------------
+// The desktop Collections UL was removed at user request. The
+// mobile drawer still has its own #mobile-legend list further
+// down which keeps category toggling alive. activeCategories
+// stays so any external callers / future re-add still works.
 const legendList = document.getElementById("legend-list");
 const activeCategories = new Set(Object.keys(CATEGORIES));
 
-for (const [key, cat] of Object.entries(CATEGORIES)) {
-  const li = document.createElement("li");
-  li.dataset.cat = key;
-  li.innerHTML = `
-    <span class="swatch" style="background:#${cat.color.toString(16).padStart(6, "0")}"></span>
-    <span data-i18n-cat="${key}">${categoryLabel(cat)}</span>
-  `;
-  li.addEventListener("click", () => {
-    if (activeCategories.has(key)) {
-      activeCategories.delete(key);
-      li.classList.add("muted");
-    } else {
-      activeCategories.add(key);
-      li.classList.remove("muted");
-    }
-    applyCategoryFilter();
-  });
-  legendList.appendChild(li);
+if (legendList) {
+  for (const [key, cat] of Object.entries(CATEGORIES)) {
+    const li = document.createElement("li");
+    li.dataset.cat = key;
+    li.innerHTML = `
+      <span class="swatch" style="background:#${cat.color.toString(16).padStart(6, "0")}"></span>
+      <span data-i18n-cat="${key}">${categoryLabel(cat)}</span>
+    `;
+    li.addEventListener("click", () => {
+      if (activeCategories.has(key)) {
+        activeCategories.delete(key);
+        li.classList.add("muted");
+      } else {
+        activeCategories.add(key);
+        li.classList.remove("muted");
+      }
+      applyCategoryFilter();
+    });
+    legendList.appendChild(li);
+  }
 }
 
 function applyCategoryFilter() {
