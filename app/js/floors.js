@@ -2423,6 +2423,9 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
 
   // 0. Terracotta tile floor — fills the room polygon at floor level
   //    so the interior reads as the warm tiled gallery in the reference.
+  //    rotateX(+π/2) (NOT -π/2) so the Shape's (x, y) maps to world
+  //    (x, 0, y); using a negative rotation mirrors the polygon over
+  //    the X axis and the floor lands south of the actual room.
   {
     const floorShape = new THREE.Shape();
     floorShape.moveTo(polygonLocal[0][0], polygonLocal[0][1]);
@@ -2431,7 +2434,7 @@ function addAbaJifarRoomInteriors(group, room, polygonLocal, sharedEdges,
     }
     floorShape.closePath();
     const floorGeo = new THREE.ShapeGeometry(floorShape);
-    floorGeo.rotateX(-Math.PI / 2);
+    floorGeo.rotateX(Math.PI / 2);
     floorGeo.translate(0, wallsBaseY + 0.005, 0);
     const floorMesh = new THREE.Mesh(floorGeo, interiorFloorMat);
     floorMesh.receiveShadow = true;
