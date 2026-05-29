@@ -641,7 +641,7 @@ function buildRoomStopBadge(room) {
 
   const tex = makeLabelTexture(String(room.id));
   const aspect = tex.image.width / tex.image.height;
-  const h = 0.45;
+  const h = 0.95;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: tex,
     transparent: true,
