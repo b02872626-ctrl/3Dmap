@@ -90,42 +90,20 @@ export function buildFloors() {
 
   const isSitum = BUILDING_STYLE === "situm";
 
-  // Scene-level grass — always rendered regardless of which floor is
-  // selected, so the green BG shows under both ground floor and upper
-  // floor views. Sits below all floor groups; individual floors layer
-  // their own platforms / buildings on top.
+  // Outside-the-plaza render passes — disabled at user request. The
+  // big green grass backdrop, the reference-tree clusters, the outer-
+  // lawn grass color patches and the flowering shrub scatter all sit
+  // OUTSIDE SITE_PLAZA, so they're skipped here. Lamps, the entrance
+  // gate, benches, hedges and signage live inside the plaza and stay
+  // — addExteriorDetails still runs but its outer-lawn shrub pass is
+  // suppressed by setting OUTSIDE_PLAZA_CLEAN = true below (handled
+  // by the gate inside addExteriorFloweringShrubs).
   if (isSitum) {
-    // Grass backdrop stays on root directly — visible under every
-    // floor selection (including single-floor views) so the buildings
-    // never appear to float in a void.
-    const grassBG = new THREE.Mesh(
-      new THREE.PlaneGeometry(260, 260),
-      terrainGrassMat,
-    );
-    grassBG.rotation.x = -Math.PI / 2;
-    grassBG.position.set(0, -1.55, 0);
-    grassBG.receiveShadow = true;
-    grassBG.userData.kind = "grass-bg";
-    root.add(grassBG);
-
-    // All other scene-root outdoor pieces (trees, lamps, gate,
-    // benches, planters, hedges, shrubs, signage, grass color
-    // patches) live inside a wrapper group tagged so main.js can
-    // hide them whenever the user toggles a specific floor.
     const sceneOutdoorDecor = new THREE.Group();
     sceneOutdoorDecor.name = "scene-outdoor-decor";
     sceneOutdoorDecor.userData.kind = "sceneOutdoorDecor";
     root.add(sceneOutdoorDecor);
 
-    if (LANDSCAPE_DECOR) addLandscapeDecor(sceneOutdoorDecor);
-    try {
-      addReferenceTrees(sceneOutdoorDecor);
-    } catch (err) {
-      console.error("addReferenceTrees failed:", err);
-    }
-    if (SHOW_GROUND_DETAILS && SHOW_GRASS_VARIATION) {
-      addGroundGrassPatches(sceneOutdoorDecor);
-    }
     addExteriorDetails(sceneOutdoorDecor);
   }
 
@@ -4097,7 +4075,10 @@ function addExteriorDetails(root) {
   // Flagpoles disabled at user request. Re-enable by uncommenting:
   // try { addExteriorFlagpoles(root); }    catch (e) { console.error("flagpoles:", e); }
   try { addExteriorHedges(root); }          catch (e) { console.error("hedges:", e); }
-  try { addExteriorFloweringShrubs(root); } catch (e) { console.error("shrubs:", e); }
+  // Flowering shrubs sit on the outer lawn — skipped now that the
+  // whole outside-the-plaza area is hidden. Uncomment to bring them
+  // back if the lawn is ever restored.
+  // try { addExteriorFloweringShrubs(root); } catch (e) { console.error("shrubs:", e); }
   try { addExteriorSignage(root); }         catch (e) { console.error("signage:", e); }
 }
 
