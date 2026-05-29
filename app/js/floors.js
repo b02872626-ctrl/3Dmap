@@ -1402,10 +1402,63 @@ const PLAZA_GRASS_PATCHES = [
 // height by default so each lawn fills its curb like a planter bed.
 const GRASS_PATCH_HEIGHT = 0.06;
 
+// Procedural multi-shade green texture for the plaza grass patches.
+// Each patch material reuses the same canvas (RepeatWrapping) — inside
+// every patch the lawn reads as natural texture variation rather than
+// one flat colour. Generated once and cached.
+let _plazaGrassTex = null;
+function _getPlazaGrassTexture() {
+  if (_plazaGrassTex) return _plazaGrassTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  // Mid-green base.
+  ctx.fillStyle = "#6f8a4d";
+  ctx.fillRect(0, 0, 256, 256);
+  // Random soft blotches in five shades of green so the patch reads as
+  // mottled lawn instead of a flat plane. Alpha is kept moderate so
+  // the base colour still anchors the average tone.
+  const shades = ["#587a3c", "#5d7a40", "#789450", "#809b5a", "#65854a"];
+  ctx.globalCompositeOperation = "source-over";
+  for (let i = 0; i < 130; i++) {
+    const x = Math.random() * 256;
+    const y = Math.random() * 256;
+    const rx = 6 + Math.random() * 26;
+    const ry = rx * (0.55 + Math.random() * 0.55);
+    ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
+    ctx.globalAlpha = 0.30 + Math.random() * 0.30;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1.0;
+  // Tiny per-pixel speckle on top — adds a fine-grain "grass blade"
+  // texture without any actual blade geometry.
+  for (let i = 0; i < 900; i++) {
+    const x = Math.random() * 256;
+    const y = Math.random() * 256;
+    const dark = Math.random() < 0.5;
+    ctx.fillStyle = dark ? "rgba(40, 60, 25, 0.18)" : "rgba(190, 215, 150, 0.14)";
+    ctx.fillRect(x, y, 1.5, 1.5);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _plazaGrassTex = tex;
+  return tex;
+}
+
 function addPlazaGrassPatches(group) {
+  const grassTex = _getPlazaGrassTexture();
+  // World-space tiling: roughly 2 m of grass per texture repeat so
+  // every patch — even a small one — shows visible variation.
   const grassMat = new THREE.MeshStandardMaterial({
-    color: TERRAIN_GRASS, roughness: 1.0, metalness: 0, flatShading: true,
+    color: 0xffffff, map: grassTex,
+    roughness: 1.0, metalness: 0, flatShading: true,
   });
+  // Note: ExtrudeGeometry top-face UVs equal the polygon's local 2D
+  // coords in metres, so this scale is metres-per-repeat.
+  grassTex.repeat.set(0.5, 0.5);
   // Extrusion thickness equals the raise above plaza, so the patch
   // bottom is flush at plaza top and the patch top sits flush with
   // the curb's top.
@@ -1494,6 +1547,11 @@ function addOutdoorTerrain(group) {
   addAutoStaircases(group);
   addPlazaGrassPatches(group);
   addGrassPatchCurbs(group);
+  // Trees on the plaza grass patches (positions in TREE_POSITIONS are
+  // all inside those patches). Wrapped in try/catch so an instancing
+  // failure doesn't sink the rest of the floor build.
+  try { addReferenceTrees(group); }
+  catch (err) { console.error("addReferenceTrees failed:", err); }
   // Grass plane lives at scene level (added in buildFloors), so it
   // shows under every floor regardless of which one is filtered. Here
   // we only add the per-building paved platforms — floor-1 only.
@@ -1711,6 +1769,27 @@ const TREE_POSITIONS = [
   { type: "D", x: 6.0, z: 29.5, s: 0.95, r: 0.6 },
   { type: "B", x: 6.5, z: 32.5, s: 0.95, r: 1.8 },
   { type: "E", x: 6.0, z: 35.0, s: 0.95, r: 0   },
+
+  // ----- Patch 5: Node-1 pocket (14-18 × 29.2-31.8, small) -----
+  { type: "D", x: 15.0, z: 30.0, s: 0.70, r: 0.4 },
+  { type: "B", x: 17.0, z: 30.8, s: 0.70, r: 1.6 },
+
+  // ----- Patch 6: North strip (22-46.5 × -0.5-1.5, narrow) -----
+  // Slim columnar trees so the canopy stays inside the curb.
+  { type: "E", x: 24.0, z: 0.5, s: 0.85, r: 0 },
+  { type: "E", x: 30.0, z: 0.5, s: 0.85, r: 0 },
+  { type: "E", x: 36.0, z: 0.5, s: 0.85, r: 0 },
+  { type: "E", x: 42.0, z: 0.5, s: 0.85, r: 0 },
+
+  // ----- Patch 7: West strip (4.5-7.5 × 3-13.5, narrow) -----
+  { type: "E", x: 6.0, z:  5.0, s: 0.85, r: 0 },
+  { type: "E", x: 6.0, z:  8.5, s: 0.85, r: 0 },
+  { type: "E", x: 6.0, z: 12.0, s: 0.85, r: 0 },
+
+  // ----- Patch 8: NE corner pocket (34-46.5 × 6.5-10) -----
+  { type: "D", x: 36.5, z: 8.0, s: 0.80, r: 0.7 },
+  { type: "B", x: 40.5, z: 8.5, s: 0.85, r: 1.4 },
+  { type: "D", x: 44.0, z: 8.0, s: 0.80, r: 2.2 },
 ];
 
 // CylinderGeometry / ConeGeometry are indexed; IcosahedronGeometry is
