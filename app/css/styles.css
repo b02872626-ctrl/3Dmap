@@ -1205,4 +1205,43 @@ html, body {
 .mobile-drawer .mobile-sub,
 .mobile-drawer h4 { color: var(--text-2); }
 .mobile-drawer .ghost-btn { color: var(--text-0); }
+
+/* ------------------------------------------------------------
+   SOLID white cards — kill the frosted-glass translucency +
+   backdrop blur so every panel reads as a clean, fully opaque
+   white surface (warm white #fffaf3 to sit with the scene's
+   cream walls). Brown border + warm shadow keep the accent.
+   ------------------------------------------------------------ */
+.brand,
+.building-tab,
+.search,
+#search-results,
+.topbar-btn,
+.view-toggle,
+.floor-switcher,
+.legend,
+.directions,
+.mobile-drawer,
+.tooltip,
+.details {
+  background: var(--bg-1) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border-color: var(--line);
+}
+
+/* Hover / muted bands stay a touch darker than the card so they're
+   still visible against the solid white. */
+.building-tab:hover,
+.topbar-btn:hover,
+#search-results li:hover,
+#search-results li.active { background: var(--bg-2) !important; }
+
+/* Accent (active) surfaces stay solid brown, not white. */
+.floor-switcher button.active,
+.topbar-btn.active,
+.view-toggle-option.active {
+  background: var(--accent) !important;
+  color: #fff;
+}
 .icon-btn { color: var(--text-0); }
