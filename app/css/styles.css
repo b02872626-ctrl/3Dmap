@@ -1244,4 +1244,37 @@ html, body {
   background: var(--accent) !important;
   color: #fff;
 }
+
+/* ------------------------------------------------------------
+   Language switcher (EN / አማ / ORO) — solid white segmented pill
+   in the top bar, brown active segment.
+   ------------------------------------------------------------ */
+.lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+}
+.lang-option {
+  background: transparent;
+  border: 0;
+  color: var(--text-1);
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.15s var(--ease);
+  line-height: 1;
+}
+.lang-option:hover { background: var(--bg-2); color: var(--text-0); }
+.lang-option.active {
+  background: var(--accent);
+  color: #fff;
+}
 .icon-btn { color: var(--text-0); }

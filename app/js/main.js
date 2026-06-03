@@ -168,9 +168,13 @@ function applyLanguage(lang) {
   if (mNameEl) mNameEl.textContent = buildingName(ACTIVE_BUILDING);
   if (mSubEl)  mSubEl.textContent  = buildingSubtitle(ACTIVE_BUILDING);
 
-  // Toggle button shows the NEXT language in the EN → AM → OR cycle.
+  // Mobile drawer's single cycling button shows the NEXT language.
   document.querySelectorAll(".lang-toggle").forEach((el) => {
     el.textContent = LANG_LABEL[lang] || "አ";
+  });
+  // Desktop top-bar segmented switcher — highlight the active segment.
+  document.querySelectorAll(".lang-option").forEach((el) => {
+    el.classList.toggle("active", el.dataset.lang === lang);
   });
 
   // Re-render the currently selected room's info panel (if any) so the
@@ -1418,6 +1422,11 @@ document.getElementById("mobile-reset")?.addEventListener("click", () => {
 document.getElementById("lang-toggle")?.addEventListener("click", () => {
   const next = LANG_CYCLE[(LANG_CYCLE.indexOf(currentLang) + 1) % LANG_CYCLE.length];
   applyLanguage(next);
+});
+
+// Desktop top-bar language switcher — each segment sets its language.
+document.querySelectorAll("#lang-switcher .lang-option").forEach((btn) => {
+  btn.addEventListener("click", () => applyLanguage(btn.dataset.lang));
 });
 
 // --- Collections legend (mobile) — populated from CATEGORIES ---
