@@ -436,8 +436,16 @@ const ABA_ROOM_CONTENT = {
 // Files live under app/assets/videos/ and are served by the static
 // site so the <video> element can stream them directly.
 const ABA_ROOM_VIDEOS = {
-  2: "assets/videos/ground-stop-2.mp4",   // Geda System
-  4: "assets/videos/ground-stop-4.mp4",   // Aba Jifar II
+  // Ground floor
+  2:  "assets/videos/ground-stop-2.mp4",    // Geda System
+  3:  "assets/videos/ground-stop-3.mp4",    // State Formation (Aba Jobir ground floor footage)
+  4:  "assets/videos/ground-stop-4.mp4",    // Aba Jifar II
+  5:  "assets/videos/ground-stop-5.mp4",    // Religion in the Kingdom (Community Mosque footage)
+  15: "assets/videos/ground-stop-15.mp4",   // Gibe Kingdom (Gene Qorree footage)
+  // First (upper) floor
+  6:  "assets/videos/first-stop-6.mp4",     // Justice Dispensation (Aba Jobir first floor footage)
+  8:  "assets/videos/first-stop-8.mp4",     // Administration & Diplomacy (Aba Jifar first floor footage)
+  12: "assets/videos/first-stop-12.mp4",    // Family Room 1 (Family Mosque footage)
 };
 for (const r of ABA_ROOMS) {
   const c = ABA_ROOM_CONTENT[r.id];
