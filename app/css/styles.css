@@ -2,16 +2,19 @@
    CAM · 3D Visitor Guide — Situm-inspired UI
    ============================================================= */
 :root {
-  --bg-0: #0f1216;
-  --bg-1: #161b22;
-  --bg-2: #1f2630;
-  --line: rgba(255,255,255,0.08);
-  --text-0: #f3f5f8;
-  --text-1: #c5cad3;
-  --text-2: #8a93a0;
-  --accent: #ff4d6a;
-  --accent-2: #f0a92b;
-  --shadow-lg: 0 24px 60px rgba(0,0,0,0.45), 0 4px 14px rgba(0,0,0,0.35);
+  /* Warm white card / brown accent palette — matches the cream walls,
+     dark walnut wood, terracotta roofs and beige paver in the scene. */
+  --bg-0: #f4ede0;            /* page backdrop — same as scene clear   */
+  --bg-1: #fffaf3;            /* card background (near-white cream)    */
+  --bg-2: #f1e7d4;            /* hover / muted band                    */
+  --line: rgba(106, 67, 42, 0.18);   /* subtle brown border             */
+  --text-0: #3a2418;          /* primary text — dark walnut            */
+  --text-1: #6b432a;          /* secondary — saddle brown              */
+  --text-2: #a89578;          /* tertiary — muted tan                  */
+  --accent: #8a5d35;          /* brown accent — wood / leather         */
+  --accent-2: #c89a3d;        /* warm gold trim                        */
+  --shadow-lg: 0 18px 40px rgba(74, 56, 37, 0.18),
+               0 4px 12px rgba(74, 56, 37, 0.10);
   --radius: 14px;
   --radius-sm: 10px;
   --ease: cubic-bezier(.2,.7,.2,1);
@@ -23,7 +26,7 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: radial-gradient(ellipse at top, #1c2230 0%, #0b0d11 60%, #06080a 100%);
+  background: #f4ede0;
   color: var(--text-0);
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
@@ -57,7 +60,7 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -75,7 +78,7 @@ html, body {
   align-items: center;
   gap: 10px;
   padding: 9px 14px;
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -89,7 +92,7 @@ html, body {
   position: relative;
 }
 .building-tab:hover {
-  background: rgba(34,40,50,0.92);
+  background: rgba(241,231,212,0.96);
   color: var(--text-0);
 }
 .building-tab.active {
@@ -157,7 +160,7 @@ html, body {
   position: relative;
   flex: 1;
   max-width: 380px;
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -186,7 +189,7 @@ html, body {
   margin: 6px 0 0;
   padding: 6px;
   list-style: none;
-  background: rgba(22,27,34,0.95);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line);
@@ -221,7 +224,7 @@ html, body {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -233,19 +236,19 @@ html, body {
   cursor: pointer;
   transition: 0.18s var(--ease);
 }
-.topbar-btn:hover { background: rgba(38,46,58,0.95); }
+.topbar-btn:hover { background: rgba(241,231,212,0.96); }
 .topbar-btn.active {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(255,77,106,0.35);
+  box-shadow: 0 6px 16px rgba(138, 93, 53, 0.35);
 }
 
 /* Iso ↔ Top toggle (pill with two segments) */
 .view-toggle {
   display: inline-flex;
   align-items: center;
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -269,7 +272,7 @@ html, body {
 .view-toggle-option.active {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 4px 10px rgba(255,77,106,0.30);
+  box-shadow: 0 4px 10px rgba(138, 93, 53, 0.30);
 }
 .view-toggle-option.active:hover { color: #fff; }
 
@@ -337,7 +340,7 @@ html, body {
 .dir-slot:hover { background: #232a35; }
 .dir-slot.picking {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(255,77,106,0.15);
+  box-shadow: 0 0 0 3px rgba(138, 93, 53, 0.15);
 }
 .dir-slot input {
   background: transparent;
@@ -399,8 +402,8 @@ html, body {
 .dir-summary {
   margin-top: 12px;
   padding: 10px 12px;
-  background: rgba(255,77,106,0.08);
-  border: 1px solid rgba(255,77,106,0.2);
+  background: rgba(138, 93, 53, 0.08);
+  border: 1px solid rgba(138, 93, 53, 0.2);
   border-radius: 10px;
   font-size: 12px;
   color: var(--text-1);
@@ -477,7 +480,7 @@ html, body {
 }
 .dir-step:hover { background: rgba(255,255,255,0.04); }
 .dir-step.active {
-  background: rgba(255,77,106,0.12);
+  background: rgba(138, 93, 53, 0.12);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .dir-step.active .step-text { color: var(--text-0); }
@@ -504,7 +507,7 @@ html, body {
   color: var(--text-0);
   flex-shrink: 0;
 }
-.dir-step.turn .step-icon { background: rgba(255,77,106,0.10); border-color: rgba(255,77,106,0.30); color: #ffb1bf; }
+.dir-step.turn .step-icon { background: rgba(138, 93, 53, 0.10); border-color: rgba(138, 93, 53, 0.30); color: #ffb1bf; }
 .dir-step.elevator .step-icon { background: #4ade8022; border-color: #4ade8055; color: #a7f3c8; }
 .dir-step.arrive .step-icon { background: var(--accent); border-color: var(--accent); color: #fff; }
 .dir-step .step-text strong { color: var(--text-0); }
@@ -533,7 +536,7 @@ html, body {
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -558,7 +561,7 @@ html, body {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
-  box-shadow: 0 6px 16px rgba(255,77,106,0.35);
+  box-shadow: 0 6px 16px rgba(138, 93, 53, 0.35);
 }
 .floor-switcher hr { width: 70%; border: 0; border-top: 1px solid var(--line); margin: 4px auto; }
 
@@ -569,7 +572,7 @@ html, body {
   left: 18px;
   width: 360px;
   max-width: calc(100vw - 36px);
-  background: rgba(22,27,34,0.85);
+  background: rgba(255,250,243,0.96);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line);
@@ -591,7 +594,7 @@ html, body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: rgba(38, 46, 58, 0.85);
+  background: rgba(255,250,243,0.96);
   border: 1px solid var(--line);
   color: var(--text-0);
   font-size: 20px;
@@ -604,7 +607,7 @@ html, body {
   z-index: 2;
   transition: background 0.15s var(--ease);
 }
-.legend-close:hover { background: rgba(60, 68, 80, 0.95); }
+.legend-close:hover { background: rgba(220,200,168,0.96); }
 /* When the selected room has a 3D video, give the card extra width
    + a bigger description so the player + narrative + meta + tip all
    read comfortably without crowding each other. */
@@ -795,10 +798,10 @@ html, body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 6px 14px rgba(255,77,106,0.30);
+  box-shadow: 0 6px 14px rgba(138, 93, 53, 0.30);
   transition: 0.18s var(--ease);
 }
-.primary-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(255,77,106,0.40); }
+.primary-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(138, 93, 53, 0.40); }
 .primary-btn:active { transform: translateY(0); }
 
 /* ---------- Hover tooltip (Figma-style pill) ---------- */
@@ -983,7 +986,7 @@ html, body {
 .info-tip {
   margin: 10px 0 12px;
   padding: 8px 10px;
-  background: rgba(255,77,106,0.08);
+  background: rgba(138, 93, 53, 0.08);
   border-left: 3px solid var(--accent);
   border-radius: 6px;
   font-size: 12px;
@@ -1061,7 +1064,7 @@ html, body {
 .mobile-bottom-bar .primary-btn {
   height: 56px;
   font-size: 16px;
-  box-shadow: 0 10px 28px rgba(255,77,106,0.40);
+  box-shadow: 0 10px 28px rgba(138, 93, 53, 0.40);
 }
 
 /* ---------- Activate mobile UI / hide desktop UI on touch ---------- */
@@ -1157,3 +1160,49 @@ html, body {
   .floor-switcher { top: auto; bottom: 240px; transform: none; }
   .search { max-width: none; }
 }
+
+/* ============================================================
+   THEME OVERRIDES — solid white card + brown accent
+   ============================================================
+   Hide the three top-bar buttons the user removed (building tabs,
+   view toggle, Directions). Search bar stays.
+   Patch a few remaining dark-themed details that didn't fall to
+   the sed pass: the floor switcher's active state, the legend
+   close button, info chip, and the mobile drawer.
+*/
+.building-tabs,
+.view-toggle,
+#open-directions   { display: none !important; }
+
+/* Floor switcher: brown active state instead of magenta. */
+.floor-switcher button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 6px 16px rgba(138, 93, 53, 0.30);
+}
+
+/* Legend close (×) button — dark badge on cream card was unreadable. */
+.legend-close {
+  background: var(--bg-2);
+  border-color: var(--line);
+  color: var(--text-0);
+}
+.legend-close:hover { background: var(--accent); color: #fff; }
+
+/* Info-card chip + tip + meta tweaks for legibility on white. */
+.info-tip { background: rgba(138, 93, 53, 0.08); border-left-color: var(--accent); }
+.info-tip strong { color: var(--accent); }
+.chip { color: #fff; }
+
+/* Search results dropdown on the cream backdrop. */
+#search-results li { color: var(--text-1); }
+#search-results li:hover,
+#search-results li.active { background: var(--bg-2); color: var(--text-0); }
+
+/* Mobile drawer is still dark in places — flip it. */
+.mobile-drawer { background: var(--bg-1) !important; color: var(--text-0); }
+.mobile-drawer .mobile-sub,
+.mobile-drawer h4 { color: var(--text-2); }
+.mobile-drawer .ghost-btn { color: var(--text-0); }
+.icon-btn { color: var(--text-0); }
